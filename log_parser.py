@@ -15,6 +15,32 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 class Commanded_Scan():
     """
+    class for a single PUPPI scan command
+
+    usage:
+    c=Commanded_Scan(<log lines>)
+
+    an entry is like:
+
+    LOAD cima_control_puppi_1410.conf
+    EXEC vw_send "pnt wrap -1"
+    SEEK J1640+2224
+    EXEC vw_send "pnt wrap 0"
+    EXEC change_puppi_parfile "/home/gpu/tzpar/1640+2224.par"
+    EXEC change_puppi_dumptime "FOLD" "10" "2048"
+    EXEC change_puppi_dumptime "CAL" "10" "2048"
+    ADJUSTPOWER
+    #EXEC wait_puppi_temporary "180" "Check PUPPI power levels"
+    SETUP pulsaron secs=1290 loops=1 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
+    PULSARON
+
+    it begins with "LOAD" and ends with "PULSARON"
+    if the block is ended without "PULSARON", then it is assumed that the command is not executed ('execute'=False)
+
+    the settings are stored in the dictionary c._data
+    which can be dumped to json as c.asjson()
+        
+    Based on the specs at:
     http://www.naic.edu/~cima/cima_puppi.html
     """
 
@@ -84,6 +110,23 @@ class Commanded_Scan():
         return json.dumps(self._data)
 
 class Command_Parser():
+    """
+    class to parse a whole PUPPI command file
+
+    usage:
+    c=Command_Parser(<log file>)
+
+    it separates the file into blocks that start with "LOAD"
+    each block is sent to Commanded_Scan() for parsing
+    the results are saved as a list of commands, self.commands
+
+    can be output to a dictionary:
+    c.asdict()
+    or JSON:
+    c.asjson()    
+
+    """
+
 
     def __init__(self, filename):
 
@@ -143,8 +186,20 @@ class Command_Parser():
 
     def asjson(self):
         return json.dumps(self.asdict())
-    
 
-c=Command_Parser('sessionB.cmd')
-c=Command_Parser('sessionC_No-S.cmd')
+    def __repr__(self):
+        s='PUPPI commands from {}, using catalog {}, total time to execute: {}s\n'.format(self.filename,
+                                                                                          self.catalog,
+                                                                                          self.total_time)
+        return s
+    
+    def __str__(self):
+        s=['PUPPI commands from {}, using catalog {}, total time to execute: {}s'.format(self.filename,
+                                                                                         self.catalog,
+                                                                                         self.total_time)]
+        for c in self.commands:
+            s.append(str(c))
+        return '\n'.join(s)
+
+
 
