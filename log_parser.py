@@ -7,7 +7,7 @@ import sys
 import json
 from collections import OrderedDict
 
-# create logger with 'spam_application'
+# create logger with 'log_parser'
 logger = logging.getLogger('log_parser')
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
