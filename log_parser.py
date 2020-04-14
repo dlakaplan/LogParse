@@ -9,7 +9,6 @@ from collections import OrderedDict
 
 # create logger with 'log_parser'
 logger = logging.getLogger('log_parser')
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 
 
@@ -48,7 +47,7 @@ class Commanded_Scan():
         self._data=OrderedDict({'execute': False})
 
         if not loglines[0].startswith('LOAD'):
-            logging.error('Commanded scan did not start with LOAD')
+            logger.error('Commanded scan did not start with LOAD')
             return None
         for line in loglines:
             if line.startswith('#'):
@@ -60,13 +59,13 @@ class Commanded_Scan():
                                line.split()[-1])
                     if m:
                         self._data['frequency'] = int(m.groups()[0])                        
-                    logging.debug('Frequency = {}'.format(self._data['frequency']))
+                    logger.debug('Frequency = {}'.format(self._data['frequency']))
                 except ValueError:
-                    logging.error('Unable to parse frequency from line:\n.{}'.format(line))
+                    logger.error('Unable to parse frequency from line:\n.{}'.format(line))
                     return None
             elif line.startswith('SEEK'):
                 self._data['target'] = line.split()[-1]
-                logging.debug('Target = {}'.format(self._data['target']))
+                logger.debug('Target = {}'.format(self._data['target']))
 
             elif line.startswith('EXEC'):
                 if 'change_puppi_parfile' in line:
@@ -138,7 +137,7 @@ class Command_Parser():
             self.filename=filename
             lines=f.readlines()
 
-        logging.debug('Reading {0}'.format(self.filename))
+        logger.debug('Reading {0}'.format(self.filename))
 
         ending_number = None
         finished_command = True
@@ -168,9 +167,9 @@ class Command_Parser():
 
     def load_command(self, lines):
         self.commands.append(Commanded_Scan(lines))
-        logging.info(str(self.commands[-1]))
+        logger.info(str(self.commands[-1]))
         if not self.commands[-1]._data['execute']:
-            logging.warning('Scan is not executed')
+            logger.warning('Scan is not executed')
         else:
             self.total_time+=self.commands[-1]._data['secs']
 
@@ -203,3 +202,9 @@ class Command_Parser():
 
 
 
+if __name__ == "__main__":
+    # for testing
+    c=Command_Parser('sessionB.cmd')
+    print(c)
+    c=Command_Parser('sessionC_No-S.cmd')
+    print(c)
