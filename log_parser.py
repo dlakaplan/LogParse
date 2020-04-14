@@ -8,7 +8,9 @@ import json
 from collections import OrderedDict
 
 # create logger with 'log_parser'
+logging.basicConfig()
 logger = logging.getLogger('log_parser')
+logger.setLevel(logging.DEBUG)
 
 
 
