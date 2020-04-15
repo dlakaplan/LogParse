@@ -115,12 +115,12 @@ class Commanded_Scan():
             else:
                 t=self._data['secs']
 
-            return "{} PSR {} for {}s at {}MHz at linenumber {}-{}".format(self.command_type,
-                                                                           self._data['target'],
-                                                                           t,
-                                                                           self._data['frequency'],
-                                                                           self._data['start_linenumber'],
-                                                                           self._data['end_linenumber'])
+            return "{} PSR {:<10} for {:>4}s at {:>4}MHz at linenumber {:>5} - {:>5}".format(self.command_type,
+                                                                                             self._data['target'],
+                                                                                             t,
+                                                                                             self._data['frequency'],
+                                                                                             self._data['start_linenumber'],
+                                                                                             self._data['end_linenumber'])
         except KeyError:
             # some of those aren't present
             return "Bad command at linenumber {}-{}".format(self._data['start_linenumber'],
@@ -260,6 +260,12 @@ class Log_Parser():
     or figuring out weird conditions that would stop scans
 
     """
+
+    # tolerance for noting a discrepancy between the requested and executed exposure time (in s)
+    # if the |difference| < tolerance, don't do anything special
+    tolerance = 200
+
+    
     def __init__(self, filename):
 
         self.data=OrderedDict()
@@ -397,14 +403,20 @@ class Log_Parser():
             for r in self.requested_commands.commands:
                 if c['orig_linenumber'] == r['end_linenumber']:
                     request=r
-                    break
+                    break                
             if request is None:
                 logger.error('Could not find a requested scan for {}'.format(c))
             else:
-                s.append('{:>6} sec --> {} ({} sec requested)'.format(
+                note=''
+                if c['elapsed_time'] - request['secs'] > self.tolerance:
+                    note='***'
+                if c['elapsed_time'] - request['secs'] < -self.tolerance:
+                    note='---'
+                s.append('{:.>6} sec --> {} ({} sec requested) {}'.format(
                     time_gap,
                     c,
-                    r['secs']))
+                    request['secs'],
+                    note))
             
         return '\n'.join(s)
             
