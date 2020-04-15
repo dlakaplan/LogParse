@@ -11,16 +11,16 @@ import os
 # create logger with 'log_parser'
 logging.basicConfig()
 logger = logging.getLogger('log_parser')
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.WARNING)
 
 
 ##################################################
-class Commanded_Scan():
+class CIMA_Commanded_Scan():
     """
-    class for a single PUPPI scan command
+    class for a single CIMA scan command
 
     usage:
-    c=Commanded_Scan(<log lines>)
+    c=CIMA_Commanded_Scan(<log lines>)
 
     an entry is like:
 
@@ -32,7 +32,7 @@ class Commanded_Scan():
     EXEC change_puppi_dumptime "FOLD" "10" "2048"
     EXEC change_puppi_dumptime "CAL" "10" "2048"
     ADJUSTPOWER
-    #EXEC wait_puppi_temporary "180" "Check PUPPI power levels"
+    #EXEC wait_puppi_temporary "180" "Check CIMA power levels"
     SETUP pulsaron secs=1290 loops=1 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
     PULSARON
 
@@ -132,15 +132,15 @@ class Commanded_Scan():
         return json.dumps(self._data)
 
 ##################################################
-class Command_Parser():
+class CIMA_Command_Parser():
     """
-    class to parse a whole PUPPI command file
+    class to parse a whole CIMA command file
 
     usage:
-    c=Command_Parser(<log file>)
+    c=CIMA_Command_Parser(<log file>)
 
     it separates the file into blocks that start with "LOAD"
-    each block is sent to Commanded_Scan() for parsing
+    each block is sent to CIMA_Commanded_Scan() for parsing
     the results are saved as a list of commands, self.commands
 
     can be output to a dictionary:
@@ -194,7 +194,7 @@ class Command_Parser():
         
 
     def load_command(self, lines, start=0):
-        self.commands.append(Commanded_Scan(lines, start=start, command_type=self.command_type))
+        self.commands.append(CIMA_Commanded_Scan(lines, start=start, command_type=self.command_type))
         logger.info(str(self.commands[-1]))
         if not self.commands[-1]._data['execute']:
             logger.warning('Scan is not executed')
@@ -215,13 +215,13 @@ class Command_Parser():
         return json.dumps(self.asdict())
 
     def __repr__(self):
-        s='PUPPI commands from {}, using catalog {}, total time to execute: {}s\n'.format(self.filename,
+        s='CIMA commands from {}, using catalog {}, total time to execute: {}s\n'.format(self.filename,
                                                                                           self.catalog,
                                                                                           self.total_time)
         return s
     
     def __str__(self):
-        s=['PUPPI commands from {}, using catalog {}, total time to execute: {}s'.format(self.filename,
+        s=['CIMA commands from {}, using catalog {}, total time to execute: {}s'.format(self.filename,
                                                                                          self.catalog,
                                                                                          self.total_time)]
         for c in self.commands:
@@ -230,9 +230,9 @@ class Command_Parser():
 
 
 ##################################################
-def parse_line(line, fmt='%Y-%b-%d %X'):
+def parse_log_line(line, fmt='%Y-%b-%d %X'):
     """
-    t,level,message = parse_line(<line>)
+    t,level,message = parse_log_line(<line>)
     parses the lines like:
     2020-Feb-14 07:23:37 LOG4    got_cormsg: From DATATAKING: connected    : prgMgr@dap2
 
@@ -248,7 +248,7 @@ def format_time(t, fmt='%Y-%b-%dT%X'):
     return datetime.datetime.strftime(t, fmt)
 
 ##################################################
-class Log_Parser():
+class CIMA_Log_Parser():
     """
     Parse a full CIMA log file
 
@@ -282,7 +282,7 @@ class Log_Parser():
         self.data['total_time']=0
         self.data['start_time']=None
         for i,line in enumerate(self.lines):
-            t,level,message = parse_line(line)
+            t,level,message = parse_log_line(line)
             d=message.strip().split()                
 
             # we want the first instance of BEGIN
@@ -318,8 +318,8 @@ class Log_Parser():
             if 'CIMA-load_command_file: Loaded command file' in line:
                 self.data['command_file']=d[-1].replace("'","")
                 if os.path.exists(self.data['command_file']):
-                    self.requested_commands=Command_Parser(self.data['command_file'],
-                                                           command_type='Request')
+                    self.requested_commands=CIMA_Command_Parser(self.data['command_file'],
+                                                                 command_type='Request')
                     self.data['requested_commands']=self.requested_commands.asdict()
                 else:
                     logger.error('Command file "{}" does not exist'.format(self.data['command_file']))
@@ -368,8 +368,8 @@ class Log_Parser():
                         commands.append(command)
                         # use the same method to parse the executed commands
                         # as the requested commands, but change the command_type
-                        self.executed_commands.append(Commanded_Scan(commands, start=start_line,
-                                                                     command_type='Execute'))
+                        self.executed_commands.append(CIMA_Commanded_Scan(commands, start=start_line,
+                                                                          command_type='Execute'))
                         logger.info(str(self.executed_commands[-1]))
                         # add in extra info: line number and start time
                         self.executed_commands[-1]._data['orig_linenumber']=orig_linenumber
@@ -422,11 +422,11 @@ class Log_Parser():
             
 if __name__ == "__main__":
     # for testing
-    #c=Command_Parser('sessionB.cmd')
-    #print(c)
-    #c=Command_Parser('sessionC_No-S.cmd')
-    #print(c)
-    #c=Log_Parser('p2780.cimalog_20200222')
-    c=Log_Parser('p2780.cimalog_20200214')
-
+    c=CIMA_Command_Parser('sessionB.cmd')
+    print(c)
+    c=CIMA_Command_Parser('sessionC_No-S.cmd')
+    print(c)
+    c=CIMA_Log_Parser('p2780.cimalog_20200222')
+    print(c)
+    c=CIMA_Log_Parser('p2780.cimalog_20200214')
     print(c)
