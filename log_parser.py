@@ -13,6 +13,25 @@ logging.basicConfig()
 logger = logging.getLogger("log_parser")
 logger.setLevel(logging.WARNING)
 
+##################################################
+def parse_log_line(line, fmt="%Y-%b-%d %X"):
+    """
+    t,level,message = parse_log_line(<line>)
+    parses the lines like:
+    2020-Feb-14 07:23:37 LOG4    got_cormsg: From DATATAKING: connected    : prgMgr@dap2
+
+    returns datetime object, level, message
+    """
+
+    d = line.split()
+    t = datetime.datetime.strptime(d[0] + " " + d[1], fmt)
+    level = d[2]
+    return t, level, " ".join(d[3:])
+
+
+def format_time(t, fmt="%Y-%b-%dT%X"):
+    return datetime.datetime.strftime(t, fmt)
+
 
 ##################################################
 class CIMA_Commanded_Scan:
@@ -148,6 +167,8 @@ class CIMA_Command_Parser:
     usage:
     c=CIMA_Command_Parser(<log file>)
 
+    <log file> can also be a list of strings (if the file was read in elsewhere)
+
     it separates the file into blocks that start with "LOAD"
     each block is sent to CIMA_Commanded_Scan() for parsing
     the results are saved as a list of commands, self.commands
@@ -166,10 +187,15 @@ class CIMA_Command_Parser:
         self.catalog = None
         self.total_time = 0
 
-        with open(filename) as f:
-            self.filename = filename
-            lines = f.readlines()
-
+        if isinstance(filename, str):
+            with open(filename) as f:
+                self.filename = filename
+                lines = f.readlines()
+        # passing a list of strings (1 per line) instead
+        elif isinstance(filename, list):
+            self.filename = 'None'
+            lines=filename
+            
         logger.debug("Reading {0}".format(self.filename))
 
         ending_number = None
@@ -202,7 +228,7 @@ class CIMA_Command_Parser:
         self.commands.append(
             CIMA_Commanded_Scan(lines, start=start, command_type=self.command_type)
         )
-        logger.info(str(self.commands[-1]))
+        logger.debug(str(self.commands[-1]))
         if not self.commands[-1]._data["execute"]:
             logger.warning("Scan is not executed")
         else:
@@ -238,24 +264,6 @@ class CIMA_Command_Parser:
         return "\n".join(s)
 
 
-##################################################
-def parse_log_line(line, fmt="%Y-%b-%d %X"):
-    """
-    t,level,message = parse_log_line(<line>)
-    parses the lines like:
-    2020-Feb-14 07:23:37 LOG4    got_cormsg: From DATATAKING: connected    : prgMgr@dap2
-
-    returns datetime object, level, message
-    """
-
-    d = line.split()
-    t = datetime.datetime.strptime(d[0] + " " + d[1], fmt)
-    level = d[2]
-    return t, level, " ".join(d[3:])
-
-
-def format_time(t, fmt="%Y-%b-%dT%X"):
-    return datetime.datetime.strftime(t, fmt)
 
 
 ##################################################
@@ -291,6 +299,7 @@ class CIMA_Log_Parser:
         last_command = None
         self.data["total_time"] = 0
         self.data["start_time"] = None
+        loaded_commands=OrderedDict()
         for i, line in enumerate(self.lines):
             t, level, message = parse_log_line(line)
             d = message.strip().split()
@@ -342,6 +351,14 @@ class CIMA_Log_Parser:
                             self.data["command_file"]
                         )
                     )
+
+            if 'store_command_file_line' in line:                
+                orig_linenumber = int(re.sub(r'.*?(\d+)\s+{.*', r'\1',
+                                             line))
+
+                loaded_commands[orig_linenumber] = re.sub(r'.*{(.*)}', r'\1' , line).strip()
+                logger.debug('Found command "{}" from line {}'.format(loaded_commands[orig_linenumber],
+                                                                   orig_linenumber))
 
             # go through all of the commands
             # here we can see the commands from the session file as they are actually
@@ -426,6 +443,16 @@ class CIMA_Log_Parser:
         self.data["elapsed_time"] = (
             self.data["end_time"] - self.data["start_time"]
         ).seconds
+
+        # reconstruct what the actual loaded command file was
+        logger.debug('Reading requested command list from CIMA log')
+        loaded_commands_list=[''] * max(loaded_commands.keys())
+        for k in loaded_commands.keys():
+            loaded_commands_list[k-1]=loaded_commands[k]
+        self.requested_commands = CIMA_Command_Parser(
+            loaded_commands_list, command_type="Request"
+            )
+        self.data["requested_commands"] = self.requested_commands.asdict()
 
     def __str__(self):
 
