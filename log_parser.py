@@ -327,7 +327,6 @@ class CIMAPulsarObservationLog:
             log_entry = parse_log_line(line.strip())
             if log_entry is None:
                 continue
-
             # start of observation block
             if log_entry.name == "executive" and log_entry.levelname == "BEGIN":
                 log.start_time = log_entry.datetime
