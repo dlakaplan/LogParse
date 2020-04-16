@@ -16,11 +16,16 @@ CIMALogEntry = namedtuple("CIMALogEntry", ["datetime", "levelname", "name", "mes
 
 def parse_log_line(line, datetime_format="%Y-%b-%d %X"):
     """
-    t,level,message = parse_log_line(<line>)
-    parses the lines like:
+    CIMALogEntry = parse_log_line(<line>)
+
+    parses lines like:
     2020-Feb-14 07:23:37 LOG4    got_cormsg: From DATATAKING: connected    : prgMgr@dap2
 
-    returns datetime object, level, message
+    CIMALogEntry contains (in this example):
+    datetime = 2020-Feb-14 07:23:37
+    levelname = LOG4
+    name = got_cormsg
+    message = From DATATAKING: connected    : prgMgr@dap2
     """
     match = re.match(
         r"^(?P<datetime>\d{4}-\w{3}-\d{2} \d{2}:\d{2}:\d{2})\s+(?P<levelname>\w+)\s+(?P<name>.+?):\s+(?P<message>.*)$",
@@ -40,6 +45,18 @@ def parse_log_line(line, datetime_format="%Y-%b-%d %X"):
 
 
 def parse_store_command_file_line(log_message):
+    """
+    command_parts = parse_store_command_file_line(<line>)
+
+    parses command lines like:
+    From OBSERVER: store_command_file_line 32 47 {EXEC change_puppi_dumptime "CAL" "10" "2048"}
+    from a CIMA log entry
+
+    command_parts contains (in this example):
+    command_line_num = 32
+    executive_line_num = 47
+    command = EXEC change_puppi_dumptime "CAL" "10" "2048"    
+    """
     match = re.match(
         r"^From OBSERVER: store_command_file_line (?P<command_line_num>\d+) (?P<executive_line_num>\d+) {(?P<command>.+)}$",
         log_message,
