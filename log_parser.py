@@ -295,152 +295,152 @@ class CIMAPulsarObservationLog:
         self._command_file = value
 
     @staticmethod
-def parse_cima_logfile(filename, tolerance=200):
-    """
-        Parse a full CIMA log file.
+    def parse_cima_logfile(filename, tolerance=200):
+        """
+            Parse a full CIMA log file.
 
-    Go through, find some basic info out (program, observer, starting time)
-    find the command list and parse that for the requested commands
-        then go through all of the executed commands and figure out what was actually done.
+        Go through, find some basic info out (program, observer, starting time)
+        find the command list and parse that for the requested commands
+            then go through all of the executed commands and figure out what was actually done.
 
-        Arguments:
-            filename: str - filename of the log file.
-        Keyword arguments:
-            tolerance: int - if an executed scan duration exceeds the requested duration
-                minus the tolerance (in seconds), mark the scan.
-    """
+            Arguments:
+                filename: str - filename of the log file.
+            Keyword arguments:
+                tolerance: int - if an executed scan duration exceeds the requested duration
+                    minus the tolerance (in seconds), mark the scan.
+        """
 
-    # tolerance for noting a discrepancy between the requested and executed exposure time (in s)
-    # if the |difference| < tolerance, don't do anything special
+        # tolerance for noting a discrepancy between the requested and executed exposure time (in s)
+        # if the |difference| < tolerance, don't do anything special
 
-    log = CIMAPulsarObservationLog(tolerance=tolerance)
-    parsing_stored_commands = False
-    f = open(filename)
-    line_iterator = f.__iter__()
-    line_num = 0
-    for line in line_iterator:
-        log_entry = parse_log_line(line.strip())
-        if log_entry is None:
-            continue
+        log = CIMAPulsarObservationLog(tolerance=tolerance)
+        parsing_stored_commands = False
+        f = open(filename)
+        line_iterator = f.__iter__()
+        line_num = 0
+        for line in line_iterator:
+            log_entry = parse_log_line(line.strip())
+            if log_entry is None:
+                continue
 
-        # start of observation block
-        if log_entry.name == "executive" and log_entry.levelname == "BEGIN":
-            log.start_time = log_entry.datetime
-        # collect the basic info for the log
-        elif (
-            log_entry.name == "executive"
-            and log_entry.levelname == "INFO1"
-            and "CIMA session for project" in log_entry.message
-        ):
-            tokens = log_entry.message.split("'")
-            log.project = tokens[1]
-            log.mode = tokens[3]
-            log.operator = tokens[5]
-            logger.info(
-                "CIMA session for %s with operator %s started at %s",
-                log.project,
-                log.operator,
-                log_entry.datetime,
-            )
-        # where were the data written
-        elif (
-            log_entry.levelname == "LOG4"
-            and log_entry.name == "vw_send"
-            and "To DATATAKING: cd" in log_entry.message
-        ):
-            log.data_destination = log_entry.message.split()[-1]
-            logger.info("Data written to %s", log.data_destination)
-        # name of the input command file
-        elif (
-            log_entry.levelname == "INFO4"
-            and log_entry.name == "CIMA-load_command_file"
-        ):
-            log.command_file = log_entry.message.split("'")[-2]
-        # first command line storage command
-        elif (
-            log_entry.levelname == "LOG4"
-            and log_entry.name == "exec_msg"
-            and "store_command_file_line" in log_entry.message
-        ):
-            # TODO warn user if stored commands are found more than once
-            parsing_stored_commands = True
-            # continue to parse lines to capture all command line inputs
-            while parsing_stored_commands:
-                command_parts = parse_store_command_file_line(log_entry.message)
-                if command_parts is not None:
-                    cmd_line_num, exec_line_num, cmd = command_parts
-                    if "LOAD" in cmd:
-                        conf_file = cmd.split()[-1]
-                        freq_mhz = int(conf_file.replace(".conf", "").split("_")[-1])
-                        request = CIMAPulsarObservationRequest()
-                        request.frequency = freq_mhz
-                    elif "SEEK" in cmd:
-                        request.source = cmd.split()[-1]
-                    elif "SETUP pulsaron" in cmd:
-                        request.setup_command_line_number = int(cmd_line_num)
-                        request.setup_executive_line_number = int(exec_line_num)
-                        d = {}
-                        for kv in cmd.split()[2:]:
-                            k, v = kv.split("=")
-                            d[k] = v
-                        request.duration = datetime.timedelta(seconds=int(d["secs"]))
-                    elif "PULSARON" in cmd:
-                        request.pulsaron_command_line_number = int(cmd_line_num)
-                        request.pulsaron_executive_line_number = int(exec_line_num)
-                        log.requested_commands[
-                            request.pulsaron_executive_line_number
-                        ] = request
-                    log_entry = parse_log_line(next(line_iterator).strip())
-                    line_num += 1
-                else:
-                    # stop parsing stored commands
-                    parsing_stored_commands = False
-        # end of observation block
-        elif log_entry.levelname == "ALERT" and log_entry.name == "CIMA-exit_cima":
-            log.end_time = log_entry.datetime
+            # start of observation block
+            if log_entry.name == "executive" and log_entry.levelname == "BEGIN":
+                log.start_time = log_entry.datetime
+            # collect the basic info for the log
+            elif (
+                log_entry.name == "executive"
+                and log_entry.levelname == "INFO1"
+                and "CIMA session for project" in log_entry.message
+            ):
+                tokens = log_entry.message.split("'")
+                log.project = tokens[1]
+                log.mode = tokens[3]
+                log.operator = tokens[5]
+                logger.info(
+                    "CIMA session for %s with operator %s started at %s",
+                    log.project,
+                    log.operator,
+                    log_entry.datetime,
+                )
+            # where were the data written
+            elif (
+                log_entry.levelname == "LOG4"
+                and log_entry.name == "vw_send"
+                and "To DATATAKING: cd" in log_entry.message
+            ):
+                log.data_destination = log_entry.message.split()[-1]
+                logger.info("Data written to %s", log.data_destination)
+            # name of the input command file
+            elif (
+                log_entry.levelname == "INFO4"
+                and log_entry.name == "CIMA-load_command_file"
+            ):
+                log.command_file = log_entry.message.split("'")[-2]
+            # first command line storage command
+            elif (
+                log_entry.levelname == "LOG4"
+                and log_entry.name == "exec_msg"
+                and "store_command_file_line" in log_entry.message
+            ):
+                # TODO warn user if stored commands are found more than once
+                parsing_stored_commands = True
+                # continue to parse lines to capture all command line inputs
+                while parsing_stored_commands:
+                    command_parts = parse_store_command_file_line(log_entry.message)
+                    if command_parts is not None:
+                        cmd_line_num, exec_line_num, cmd = command_parts
+                        if "LOAD" in cmd:
+                            conf_file = cmd.split()[-1]
+                            freq_mhz = int(conf_file.replace(".conf", "").split("_")[-1])
+                            request = CIMAPulsarObservationRequest()
+                            request.frequency = freq_mhz
+                        elif "SEEK" in cmd:
+                            request.source = cmd.split()[-1]
+                        elif "SETUP pulsaron" in cmd:
+                            request.setup_command_line_number = int(cmd_line_num)
+                            request.setup_executive_line_number = int(exec_line_num)
+                            d = {}
+                            for kv in cmd.split()[2:]:
+                                k, v = kv.split("=")
+                                d[k] = v
+                            request.duration = datetime.timedelta(seconds=int(d["secs"]))
+                        elif "PULSARON" in cmd:
+                            request.pulsaron_command_line_number = int(cmd_line_num)
+                            request.pulsaron_executive_line_number = int(exec_line_num)
+                            log.requested_commands[
+                                request.pulsaron_executive_line_number
+                            ] = request
+                        log_entry = parse_log_line(next(line_iterator).strip())
+                        line_num += 1
+                    else:
+                        # stop parsing stored commands
+                        parsing_stored_commands = False
+            # end of observation block
+            elif log_entry.levelname == "ALERT" and log_entry.name == "CIMA-exit_cima":
+                log.end_time = log_entry.datetime
 
-        # initialisation of a pulsar observation
-        # no elif as execution resumes here after parsing the stored commands
-        if (
-            log_entry.levelname == "COMMAND"
-            and log_entry.name == "run_command_line"
-            and "PULSARON" in log_entry.message
-        ):
-            match = re.match(
-                r"^EXECUTING command (?P<executive_line_num>\d+): '(?P<command>.+?)'$",
-                log_entry.message,
-            )
-            if match:
-                exec_line_num = int(match.group("executive_line_num"))
-                execution = CIMAPulsarObservationExecution()
-                execution.request = log.requested_commands[exec_line_num]
-                execution.logfile_start_line = line_num
-            else:
-                logger.error(
-                    "Failed to parse run_command_line for PULSARON: %s",
+            # initialisation of a pulsar observation
+            # no elif as execution resumes here after parsing the stored commands
+            if (
+                log_entry.levelname == "COMMAND"
+                and log_entry.name == "run_command_line"
+                and "PULSARON" in log_entry.message
+            ):
+                match = re.match(
+                    r"^EXECUTING command (?P<executive_line_num>\d+): '(?P<command>.+?)'$",
                     log_entry.message,
                 )
-        # actual start of pulsar observation
-        # only occurs if another error did not prevent it from starting
-        elif (
-            log_entry.levelname == "BEGIN"
-            and log_entry.name == "begin_task"
-            and log_entry.message == "Starting task 'pulsar on'"
-        ):
-            execution.start_time = log_entry.datetime
-            execution.logfile_end_line = line_num
-            log.executed_commands[exec_line_num] = execution
-        # end of pulsar observation
-        elif (
-            log_entry.levelname == "END"
-            and log_entry.name == "end_task"
-            and "pulsar on" in log_entry.message
-        ):
-            execution.end_time = log_entry.datetime
-        line_num += 1
-    f.close()
-    log.process_commands()
-    return log
+                if match:
+                    exec_line_num = int(match.group("executive_line_num"))
+                    execution = CIMAPulsarObservationExecution()
+                    execution.request = log.requested_commands[exec_line_num]
+                    execution.logfile_start_line = line_num
+                else:
+                    logger.error(
+                        "Failed to parse run_command_line for PULSARON: %s",
+                        log_entry.message,
+                    )
+            # actual start of pulsar observation
+            # only occurs if another error did not prevent it from starting
+            elif (
+                log_entry.levelname == "BEGIN"
+                and log_entry.name == "begin_task"
+                and log_entry.message == "Starting task 'pulsar on'"
+            ):
+                execution.start_time = log_entry.datetime
+                execution.logfile_end_line = line_num
+                log.executed_commands[exec_line_num] = execution
+            # end of pulsar observation
+            elif (
+                log_entry.levelname == "END"
+                and log_entry.name == "end_task"
+                and "pulsar on" in log_entry.message
+            ):
+                execution.end_time = log_entry.datetime
+            line_num += 1
+        f.close()
+        log.process_commands()
+        return log
 
 
 if __name__ == "__main__":
