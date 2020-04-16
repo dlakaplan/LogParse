@@ -171,6 +171,11 @@ class CIMAPulsarObservationLog:
                 note = "***"
             elif scan_current.executed_duration < scan_current.requested_duration:
                 note = "---"
+            elif (
+                scan_current.executed_duration
+                > scan_current.requested_duration + self.tolerance
+            ):
+                note = "+++"
             else:
                 note = ""
 
