@@ -16,10 +16,13 @@ CIMALogEntry = namedtuple("CIMALogEntry", ["datetime", "levelname", "name", "mes
 
 def parse_log_line(line, datetime_format="%Y-%b-%d %X"):
     """
-    CIMALogEntry = parse_log_line(<line>)
+    CIMALogEntry = parse_log_line(line)
 
-    parses lines like:
-    2020-Feb-14 07:23:37 LOG4    got_cormsg: From DATATAKING: connected    : prgMgr@dap2
+    Arguments:
+        line: str - CIMA log line
+
+    Example:
+        2020-Feb-14 07:23:37 LOG4    got_cormsg: From DATATAKING: connected    : prgMgr@dap2
 
     CIMALogEntry contains (in this example):
     datetime = 2020-Feb-14 07:23:37
@@ -48,9 +51,11 @@ def parse_store_command_file_line(log_message):
     """
     command_parts = parse_store_command_file_line(<line>)
 
-    parses command lines like:
-    From OBSERVER: store_command_file_line 32 47 {EXEC change_puppi_dumptime "CAL" "10" "2048"}
-    from a CIMA log entry
+    Arguments:
+        log_message: str - CIMA log message
+
+    Example message:
+        From OBSERVER: store_command_file_line 32 47 {EXEC change_puppi_dumptime "CAL" "10" "2048"}
 
     command_parts contains (in this example):
     command_line_num = 32
@@ -391,13 +396,18 @@ class CIMAPulsarObservationLog:
                     if command_parts is not None:
                         cmd_line_num, exec_line_num, cmd = command_parts
                         if "LOAD" in cmd:
+                            # this command starts a new observing block
                             conf_file = cmd.split()[-1]
                             freq_mhz = int(conf_file.replace(".conf", "").split("_")[-1])
+                            # create a new blank CIMAPulsarObservationRequest object
                             request = CIMAPulsarObservationRequest()
                             request.frequency = freq_mhz
                         elif "SEEK" in cmd:
+                            # this identifies the source name
                             request.source = cmd.split()[-1]
                         elif "SETUP pulsaron" in cmd:
+                            # sets various parameters
+                            # given by key=value pairs
                             request.setup_command_line_number = int(cmd_line_num)
                             request.setup_executive_line_number = int(exec_line_num)
                             d = {}
@@ -406,6 +416,10 @@ class CIMAPulsarObservationLog:
                                 d[k] = v
                             request.duration = datetime.timedelta(seconds=int(d["secs"]))
                         elif "PULSARON" in cmd:
+                            # this terminates an observing block.
+                            # if not present the pulsaron_command_line_number
+                            # and pulsaron_executive_line_number are not set
+                            # so we know that it won't be executed
                             request.pulsaron_command_line_number = int(cmd_line_num)
                             request.pulsaron_executive_line_number = int(exec_line_num)
                             log.requested_commands[
