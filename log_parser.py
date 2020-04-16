@@ -294,19 +294,20 @@ class CIMAPulsarObservationLog:
             )
         self._command_file = value
 
-
-##################################################
+    @staticmethod
 def parse_cima_logfile(filename, tolerance=200):
     """
-    Parse a full CIMA log file
+        Parse a full CIMA log file.
 
     Go through, find some basic info out (program, observer, starting time)
     find the command list and parse that for the requested commands
-    then go through all of the executed commands and figure out what was actually done
+        then go through all of the executed commands and figure out what was actually done.
 
-    needs a lot more in the way of error handling: it isn't smart at all about parsing errors/alerts from the telescope
-    or figuring out weird conditions that would stop scans
-
+        Arguments:
+            filename: str - filename of the log file.
+        Keyword arguments:
+            tolerance: int - if an executed scan duration exceeds the requested duration
+                minus the tolerance (in seconds), mark the scan.
     """
 
     # tolerance for noting a discrepancy between the requested and executed exposure time (in s)
@@ -443,5 +444,5 @@ def parse_cima_logfile(filename, tolerance=200):
 
 
 if __name__ == "__main__":
-    log = parse_cima_logfile("p2780.cimalog_20200222")
+    log = CIMAPulsarObservationLog.parse_cima_logfile("p2780.cimalog_20200222")
     log.print_results()
