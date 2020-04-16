@@ -4,6 +4,7 @@ import re
 import logging
 import datetime
 import sys
+import os
 from collections import namedtuple
 
 # create logger with 'log_parser'
@@ -81,7 +82,20 @@ class CIMAPulsarObservationRequest:
         self.setup_executive_line_number = None
         self.pulsaron_command_line_number = None
         self.pulsaron_executive_line_number = None
+        self.parfile = None
 
+
+    @property
+    def executed(self):
+        return (self.pulsaron_command_line_number is not None)
+
+    @property
+    def source_matches(self):
+        return os.path.splitext(os.path.basename(self.parfile))[0].replace('.par','') == self.source[1:]
+
+    @property
+    def parses(self):
+        return (self.executed and self.source_matches)
 
 class CIMAPulsarObservationExecution:
     def __init__(self):
@@ -153,9 +167,10 @@ class CIMAPulsarObservationLog:
         for exec_line_num, request in self.requested_commands.items():
             if exec_line_num not in self.executed_commands:
                 logger.warning(
-                    "Requested scan of %s for %d sec was not executed.",
+                    "Requested scan of %s for %d sec at %d MHz was not executed.",
                     request.source,
                     request.duration.total_seconds(),
+                    request.frequency,
                 )
             else:
                 execution = self.executed_commands[exec_line_num]
@@ -415,6 +430,8 @@ class CIMAPulsarObservationLog:
                                 k, v = kv.split("=")
                                 d[k] = v
                             request.duration = datetime.timedelta(seconds=int(d["secs"]))
+                        elif cmd.startswith('EXEC') and 'change_puppi_parfile' in cmd:
+                            request.parfile = cmd.split()[-1].replace('"','')
                         elif "PULSARON" in cmd:
                             # this terminates an observing block.
                             # if not present the pulsaron_command_line_number
@@ -478,6 +495,95 @@ class CIMAPulsarObservationLog:
         return log
 
 
+
+class CIMAPulsarObservationPlans:
+    def __init__(self):
+        self.requested_commands = []
+
+    @staticmethod
+    def parse_cima_cmdfile(filename):
+        commands = CIMAPulsarObservationPlans()
+
+        with open(filename) as f:
+            lines=f.readlines()
+
+        for line_number,cmd in enumerate(lines):
+            if cmd.startswith('#'):
+                continue
+            if cmd.startswith('LOAD'):
+                # this command starts a new observing block
+                conf_file = cmd.split()[-1]
+                freq_mhz = int(conf_file.replace(".conf", "").split("_")[-1])
+                # create a new blank CIMAPulsarObservationRequest object
+                request = CIMAPulsarObservationRequest()
+                request.frequency = freq_mhz
+                request.setup_command_line_number = line_number
+                commands.requested_commands.append(request)
+            elif cmd.startswith("SEEK"):
+                # this identifies the source name
+                commands.requested_commands[-1].source = cmd.split()[-1]
+            elif cmd.startswith("SETUP pulsaron"):
+                # sets various parameters
+                # given by key=value pairs
+                d = {}
+                for kv in cmd.split()[2:]:
+                    k, v = kv.split("=")
+                    d[k] = v
+                commands.requested_commands[-1].duration = datetime.timedelta(seconds=int(d["secs"]))
+            elif cmd.startswith('EXEC') and 'change_puppi_parfile' in cmd:
+                commands.requested_commands[-1].parfile = cmd.split()[-1].replace('"','')
+            elif cmd.startswith('PULSARON'):
+                # this terminates an observing block.
+                # if not present the pulsaron_command_line_number
+                # and pulsaron_executive_line_number are not set
+                # so we know that it won't be executed
+                commands.requested_commands[-1].pulsaron_command_line_number = int(line_number)
+
+
+        # go through the requested commands
+        # and do some basic checks
+        for request in commands.requested_commands:
+            if not request.executed:
+                logger.warning(
+                    "Requested scan of %s for %d sec at %d MHz [line=%d] was not executed.",
+                    request.source,
+                    request.duration.total_seconds(),
+                    request.frequency,
+                    request.setup_command_line_number,
+                )
+            if not request.source_matches:
+                logger.warning(
+                    'Requested scan of %s for %d sec at %d MHz [line=%d]: parfile "%s" does not match source "%s"',
+                    request.source,
+                    request.duration.total_seconds(),
+                    request.frequency,
+                    request.setup_command_line_number,
+                    request.parfile,
+                    request.source,
+                )
+
+        return commands
+
+    def print_results(self, output=sys.stdout):
+        for request in self.requested_commands:
+            note = ''
+            if not request.parses:
+                note = '*'
+            print(
+                "Request PSR {:<10} for {:>4}s at {:>4}MHz at linenumber {:>5} {}".format(
+                request.source,
+                int(request.duration.total_seconds()),
+                request.frequency,
+                request.setup_command_line_number,
+                note,
+                ),
+                file=output,
+                )
+
+
 if __name__ == "__main__":
     log = CIMAPulsarObservationLog.parse_cima_logfile("p2780.cimalog_20200222")
     log.print_results()
+
+    cmd = CIMAPulsarObservationPlans.parse_cima_cmdfile('sessionB.cmd')
+    cmd.print_results()
