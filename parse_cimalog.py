@@ -20,7 +20,7 @@ def main():
                         type=str,
                         nargs='+',
                         default=None,
-                        help='Name of CIMA log file')
+                        help='Name(s) of CIMA log file(s)')
     parser.add_argument('--directory', '-d',
                         type=str,
                         default='./',
