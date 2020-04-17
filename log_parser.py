@@ -10,7 +10,7 @@ from collections import namedtuple
 # create logger with 'log_parser'
 logging.basicConfig()
 logger = logging.getLogger("log_parser")
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.INFO)
 
 CIMALogEntry = namedtuple("CIMALogEntry", ["datetime", "levelname", "name", "message"])
 
@@ -112,6 +112,11 @@ class CIMAPulsarObservationExecution(object):
     def duration(self):
         return self.end_time - self.start_time
 
+class CIMATrackingExecution(object):
+    def __init__(self):
+        self.source = None
+        self.start_time = None
+        self.logfile_start_line = None
 
 class CIMAPulsarScan(object):
     def __init__(self):
@@ -363,6 +368,7 @@ class CIMAPulsarObservationLog(object):
         f = open(filename)
         line_iterator = f.__iter__()
         line_num = 0
+        tracking = None
         for line in line_iterator:
             log_entry = parse_log_line(line.strip())
             if log_entry is None:
@@ -489,6 +495,8 @@ class CIMAPulsarObservationLog(object):
                 execution.start_time = log_entry.datetime
                 execution.logfile_end_line = line_num
                 log.executed_commands[exec_line_num] = execution
+                logger.info('Starting pulsar observation at %s',
+                            log_entry.datetime)
             # end of pulsar observation
             elif (
                 log_entry.levelname == "END"
@@ -496,6 +504,41 @@ class CIMAPulsarObservationLog(object):
                 and "pulsar on" in log_entry.message
             ):
                 execution.end_time = log_entry.datetime
+                logger.info('Ending pulsar observation at %s',
+                            log_entry.datetime)
+            # start a new tracking task
+            elif (
+                log_entry.levelname == "BEGIN"
+                and log_entry.name == "begin_task"
+            ):
+                match = re.match(
+                    r"Starting task 'tracking source '(.*?)''",
+                    log_entry.message,
+                    )
+                if match:
+                    tracking = CIMATrackingExecution()
+                    tracking.logfile_start_line = line_num
+                    tracking.start_time = log_entry.datetime
+                    tracking.source = match.groups()[0]
+                    logger.info('Starting to track PSR %s at %s',
+                                   tracking.source,
+                                   tracking.start_time)
+            # abort part-way through
+            elif (
+                log_entry.levelname == "LOG4"
+                and log_entry.name == "exec_msg"
+                and "abort_task skip" in log_entry.message
+                ):
+                if tracking is not None:
+                    logger.warning(
+                        "Aborting current scan on target PSR %s at %s at line %d (started at %s; tracking duration %ds)",
+                        tracking.source,
+                        log_entry.datetime,
+                        line_num,
+                        tracking.start_time,
+                        (log_entry.datetime - tracking.start_time).total_seconds(),
+                        )
+
             line_num += 1
         f.close()
         log.process_commands()
@@ -592,8 +635,8 @@ class CIMAPulsarObservationPlans(object):
 
 
 if __name__ == "__main__":
-    # log = CIMAPulsarObservationLog.parse_cima_logfile("p2780.cimalog_20200214")
-    # log.print_results()
+    log = CIMAPulsarObservationLog.parse_cima_logfile("p2780.cimalog_20200214")
+    log.print_results()
 
-    cmd = CIMAPulsarObservationPlans.parse_cima_cmdfile("sessionB.cmd")
-    cmd.print_results()
+    #cmd = CIMAPulsarObservationPlans.parse_cima_cmdfile("sessionB.cmd")
+    #cmd.print_results()
