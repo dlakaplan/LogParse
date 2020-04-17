@@ -73,7 +73,7 @@ def parse_store_command_file_line(log_message):
         return None
 
 
-class CIMAPulsarObservationRequest:
+class CIMAPulsarObservationRequest(object):
     def __init__(self):
         self.source = None
         self.frequency = None
@@ -97,7 +97,7 @@ class CIMAPulsarObservationRequest:
     def parses(self):
         return (self.executed and self.source_matches)
 
-class CIMAPulsarObservationExecution:
+class CIMAPulsarObservationExecution(object):
     def __init__(self):
         self.request = None
         self.start_time = None
@@ -110,7 +110,7 @@ class CIMAPulsarObservationExecution:
         return self.end_time - self.start_time
 
 
-class CIMAPulsarScan:
+class CIMAPulsarScan(object):
     def __init__(self):
         self.request = None
         self.execution = None
@@ -149,7 +149,7 @@ class CIMAPulsarScan:
         )
 
 
-class CIMAPulsarObservationLog:
+class CIMAPulsarObservationLog(object):
     def __init__(self, tolerance=200):
         self._start_time = None
         self._end_time = None
@@ -192,7 +192,7 @@ class CIMAPulsarObservationLog:
         )
 
         print("### {} - {}".format(self.start_time, self.end_time), file=output)
-
+        self._scans.sort(key = lambda x: x.execution.start_time)
         for scan_prev, scan_current in zip([None] + self._scans, self._scans):
             if scan_prev is None:
                 time_gap = scan_current.execution.start_time - self._start_time
@@ -496,7 +496,7 @@ class CIMAPulsarObservationLog:
 
 
 
-class CIMAPulsarObservationPlans:
+class CIMAPulsarObservationPlans(object):
     def __init__(self):
         self.requested_commands = []
 
@@ -582,8 +582,8 @@ class CIMAPulsarObservationPlans:
 
 
 if __name__ == "__main__":
-    log = CIMAPulsarObservationLog.parse_cima_logfile("p2780.cimalog_20200222")
+    log = CIMAPulsarObservationLog.parse_cima_logfile("p2780.cimalog_20200214")
     log.print_results()
 
-    cmd = CIMAPulsarObservationPlans.parse_cima_cmdfile('sessionB.cmd')
-    cmd.print_results()
+    #cmd = CIMAPulsarObservationPlans.parse_cima_cmdfile('sessionB.cmd')
+    #cmd.print_results()
