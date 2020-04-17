@@ -50,9 +50,9 @@ def main():
 
     if args.out == 'stdout':
         args.out = sys.stdout
-        #log_parser.logger.addHandler(logging.StreamHandler(sys.stdout))        
     else:
         args.out = open(args.out, 'w')
+        # add in a second logger that outputs to the same file as the main output destination
         newhandler = logging.StreamHandler(args.out)
         formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
         newhandler.setFormatter(formatter)
