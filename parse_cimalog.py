@@ -16,6 +16,11 @@ def main():
     
     parser = argparse.ArgumentParser(description='Parse an Arecibo CIMA log file',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--file', '-f',
+                        type=str,
+                        nargs='+',
+                        default=None,
+                        help='Name of CIMA log file')
     parser.add_argument('--directory', '-d',
                         type=str,
                         default='./',
@@ -29,6 +34,10 @@ def main():
                         type=int,
                         default=1,
                         help='Days in the past to look for log files (<=0: find all)')
+    parser.add_argument('--tolerance',
+                        type=int,
+                        default=100,
+                        help='Tolerance for printing out exposure difference marks')
     parser.add_argument('--email', '-e',
                         type=str,
                         default=None,
@@ -59,30 +68,35 @@ def main():
         log_parser.logger.addHandler(newhandler)
 
 
-    files=[]
-    for program in args.programs:
-        files+=sorted(glob.glob(os.path.join(args.directory,
-                                             '{}.cimalog_*'.format(program))))
-    if args.days>0:
-        today=datetime.date.today()
-        good_files=[]
-        for file in files:
-            match = re.match(
-                r".*?.cimalog_(?P<datetime>\d{4}\d{2}\d{2})",
-                file,
-                )
-            if match:
-                _datetime = datetime.datetime.strptime(match.group("datetime"), '%Y%m%d')
-                if today - _datetime.date() < datetime.timedelta(days=args.days):
-                    good_files.append(file)    
+    if args.file is None:
+        files=[]
+        for program in args.programs:
+            files+=sorted(glob.glob(os.path.join(args.directory,
+                                                 '{}.cimalog_*'.format(program))))
+        if args.days>0:
+            today=datetime.date.today()
+            good_files=[]
+            for file in files:
+                match = re.match(
+                    r".*?.cimalog_(?P<datetime>\d{4}\d{2}\d{2})",
+                    file,
+                    )
+                if match:
+                    _datetime = datetime.datetime.strptime(match.group("datetime"), '%Y%m%d')
+                    if today - _datetime.date() < datetime.timedelta(days=args.days):
+                        good_files.append(file)    
+            else:
+                good_files=files
+
+        if len(good_files)==0:
+            logger.error('No files found')
+
     else:
-        good_files=files
-
-    if len(good_files)==0:
-        logger.error('No files found')
-
+        good_files=args.file
+        
     for file in good_files:
-        log = log_parser.CIMAPulsarObservationLog.parse_cima_logfile(file)
+        log = log_parser.CIMAPulsarObservationLog.parse_cima_logfile(file,
+                                                                     tolerance=args.tolerance)
         log.print_results(output = args.out)
     
 if __name__ == "__main__":
