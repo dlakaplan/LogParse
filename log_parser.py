@@ -8,7 +8,9 @@ import os
 from collections import namedtuple
 
 # create logger with 'log_parser'
-logging.basicConfig()
+logging.basicConfig(handlers=[
+    logging.StreamHandler(sys.stdout)
+    ])
 logger = logging.getLogger("log_parser")
 logger.setLevel(logging.INFO)
 
@@ -366,6 +368,7 @@ class CIMAPulsarObservationLog(object):
         # tolerance for noting a discrepancy between the requested and executed exposure time (in s)
         # if the |difference| < tolerance, don't do anything special
 
+        logger.info('Looking at {} ...'.format(filename))
         log = CIMAPulsarObservationLog(tolerance=tolerance)
         parsing_stored_commands = False
         f = open(filename)

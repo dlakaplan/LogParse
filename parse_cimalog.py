@@ -6,6 +6,7 @@ import os
 import datetime
 import re
 import logging
+import sys
 
 import log_parser
 
@@ -32,6 +33,10 @@ def main():
                         type=str,
                         default=None,
                         help='Send email with results')
+    parser.add_argument('--out', '-o',
+                        default='stdout',
+                        type=str,
+                        help='Output destination')
     parser.add_argument('--verbose', '-v', action='count', default=0,
                         help='Increase verbosity')                   
     
@@ -42,7 +47,17 @@ def main():
         log_parser.logger.setLevel(logging.INFO)
     elif args.verbose == 2:
         log_parser.logger.setLevel(logging.DEBUG)
-   
+
+    if args.out == 'stdout':
+        args.out = sys.stdout
+        #log_parser.logger.addHandler(logging.StreamHandler(sys.stdout))        
+    else:
+        args.out = open(args.out, 'w')
+        newhandler = logging.StreamHandler(args.out)
+        formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
+        newhandler.setFormatter(formatter)
+        log_parser.logger.addHandler(newhandler)
+
 
     files=[]
     for program in args.programs:
@@ -68,7 +83,7 @@ def main():
 
     for file in good_files:
         log = log_parser.CIMAPulsarObservationLog.parse_cima_logfile(file)
-        log.print_results()
+        log.print_results(output = args.out)
     
 if __name__ == "__main__":
     main()
