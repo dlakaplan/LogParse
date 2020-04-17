@@ -116,7 +116,10 @@ class CIMATrackingExecution(object):
     def __init__(self):
         self.source = None
         self.start_time = None
+        self.end_time = None        
         self.logfile_start_line = None
+        self.logfile_end_line = None
+        self.status = None
 
 class CIMAPulsarScan(object):
     def __init__(self):
@@ -538,7 +541,30 @@ class CIMAPulsarObservationLog(object):
                         tracking.start_time,
                         (log_entry.datetime - tracking.start_time).total_seconds(),
                         )
-
+            # end tracking in good standing
+            elif (
+                log_entry.levelname == "END"
+                and log_entry.name == "end_task"
+                ):
+                match = re.match("Finishing task 'tracking source '(?P<source>.*?)'' with status '(?P<status>.*?)'",
+                                 log_entry.message,
+                                 )                
+                if match:
+                    tracking.end_time = log_entry.datetime
+                    tracking.logfile_end_line = line_num
+                    if match.group('status') == 'OK':
+                        logger.info('Ending tracking of %s at %s with status %s',
+                                    match.group('source'),
+                                    log_entry.datetime,
+                                    match.group('status'),
+                                    )
+                    else:
+                        logger.warning('Ending tracking of %s at %s with status %s',
+                                       match.group('source'),
+                                       log_entry.datetime,
+                                       match.group('status'),
+                                       )
+                
             line_num += 1
         f.close()
         log.process_commands()
