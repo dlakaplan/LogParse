@@ -85,15 +85,15 @@ def main():
                     _datetime = datetime.datetime.strptime(match.group("datetime"), '%Y%m%d')
                     if today - _datetime.date() < datetime.timedelta(days=args.days):
                         good_files.append(file)    
-            else:
-                good_files=files
+        else:
+            good_files=files
 
         if len(good_files)==0:
-            logger.error('No files found')
+            log_parser.logger.error('No files found')
 
     else:
         good_files=args.file
-        
+
     for file in good_files:
         log = log_parser.CIMAPulsarObservationLog.parse_cima_logfile(file,
                                                                      tolerance=args.tolerance)
