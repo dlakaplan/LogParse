@@ -107,6 +107,7 @@ class CIMAPulsarObservationExecution(object):
         self.end_time = None
         self.logfile_start_line = None
         self.logfile_end_line = None
+        self.type = 'standard'
 
     @property
     def duration(self):
@@ -153,8 +154,9 @@ class CIMAPulsarScan(object):
         return self.execution.logfile_end_line
 
     def __str__(self):
-        return "Execute PSR {:<10} for {:>4}s at {:>4}MHz at linenumber {:>5} - {:>5}".format(
+        return "Execute PSR {:<10} ({}) for {:>4}s at {:>4}MHz at linenumber {:>5} - {:>5}".format(
             self.source,
+            self.execution.type[:3],
             int(self.executed_duration.total_seconds()),
             self.frequency,
             self.logfile_start_line,
@@ -247,6 +249,8 @@ class CIMAPulsarObservationLog(object):
                 ),
                 file=output,
             )
+            print(scan_current.request.source,scan_current.execution.start_time,scan_current.execution.end_time,
+                  (scan_current.execution.end_time-scan_current.execution.start_time).total_seconds())
 
     @property
     def start_time(self):
@@ -506,12 +510,17 @@ class CIMAPulsarObservationLog(object):
             elif (
                 log_entry.levelname == "BEGIN"
                 and log_entry.name == "begin_task"
-                and log_entry.message == "Starting task 'pulsar on'"
+                and "Starting task 'pulsar on" in log_entry.message
             ):
                 execution.start_time = log_entry.datetime
                 execution.logfile_end_line = line_num
                 log.executed_commands[exec_line_num] = execution
-                logger.info("Starting pulsar observation at %s", log_entry.datetime)
+                if 'calibration' in log_entry.message:
+                    execution.type='calibration'
+                logger.info("Starting pulsar observation (%s) at %s line = %d",
+                            execution.type,
+                            log_entry.datetime,
+                            line_num)
             # end of pulsar observation
             elif (
                 log_entry.levelname == "END"
@@ -519,7 +528,8 @@ class CIMAPulsarObservationLog(object):
                 and "pulsar on" in log_entry.message
             ):
                 execution.end_time = log_entry.datetime
-                logger.info("Ending pulsar observation at %s", log_entry.datetime)
+                logger.info("Ending pulsar observation at %s line = %d", log_entry.datetime, line_num)
+            """
             # start a new tracking task
             elif log_entry.levelname == "BEGIN" and log_entry.name == "begin_task":
                 match = re.match(
@@ -573,7 +583,7 @@ class CIMAPulsarObservationLog(object):
                             log_entry.datetime,
                             match.group("status"),
                         )
-
+                        """
             line_num += 1
         f.close()
         log.process_commands()
