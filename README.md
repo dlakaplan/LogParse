@@ -2,39 +2,69 @@
 
 Methods to parse Arecibo PUPPI command files and CIMA logs.
 
-## Command files:
-```python
-import log_parser
-c=log_parser.CIMA_Command_Parser('sessionB.cmd')
-print(c)
+## Dependencies:
+All standard python, 2 (>=2.7) or 3: re, logging, datetime, sys, collections, os
+
+## Installation:
 ```
-~~~
-CIMA commands from sessionB.cmd, using catalog nanograv.cat, total time to execute: 31320s
-Request PSR J1640+2224 for 1290s at 1410MHz at linenumber    12 -    23
-Request PSR J1640+2224 for 1290s at  430MHz at linenumber    24 -    32
-Request PSR J1630+3550 for 1290s at  430MHz at linenumber    33 -    41
-Request PSR J1630+3550 for 1290s at 1410MHz at linenumber    42 -    50
-Request PSR J1745+1017 for 1290s at 2030MHz at linenumber    51 -    59
-Request PSR J1745+1017 for 1290s at 1410MHz at linenumber    60 -    68
-Request PSR J1853+1303 for 1290s at 1410MHz at linenumber    69 -    77
-Request PSR J1853+1303 for 1290s at  430MHz at linenumber    78 -    86
-Request PSR B1855+09   for 1290s at  430MHz at linenumber    87 -    95
-Request PSR B1855+09   for 1290s at 1410MHz at linenumber    96 -   104
-Request PSR J1911+1347 for 1290s at 1410MHz at linenumber   105 -   113
-Request PSR J1911+1347 for 1290s at  430MHz at linenumber   114 -   122
-Request PSR J2017+0603 for 1440s at 2030MHz at linenumber   123 -   131
-Request PSR J2017+0603 for 1440s at 1410MHz at linenumber   132 -   140
-Request PSR J2043+1711 for 1440s at 1410MHz at linenumber   141 -   149
-Request PSR J2043+1711 for 1440s at  430MHz at linenumber   150 -   158
-Request PSR J2234+0944 for 1440s at 2030MHz at linenumber   159 -   167
-Request PSR J2234+0944 for 1440s at 1410MHz at linenumber   168 -   176
-Request PSR J2317+1439 for 1440s at 1410MHz at linenumber   177 -   185
-Request PSR J2317+1439 for 1440s at  430MHz at linenumber   186 -   194
-Request PSR J0023+0923 for 1440s at  430MHz at linenumber   195 -   203
-Request PSR J0023+0923 for 1440s at 1410MHz at linenumber   204 -   212
-Request PSR J0154+1833 for 1440s at 1410MHz at linenumber   213 -   220
-Request PSR J0154+1833 for 1440s at  430MHz at linenumber   221 -   229
-~~~
+pip install .
+```
+or
+```
+python ./setup.py install
+```
+
+
+## Command files:
+```
+parse_puppi -h
+usage: parse_puppi [-h] [--out OUT] [--verbose] file [file ...]
+
+Parse an Arecibo PUPPI command file
+
+positional arguments:
+  file               Name(s) of PUPPI command file(s)
+
+optional arguments:
+  -h, --help         show this help message and exit
+  --out OUT, -o OUT  Output destination (default: stdout)
+  --verbose, -v      Increase verbosity (default: 0)
+```
+
+```
+parse_puppi examples/puppi_cmd/sessionB.cmd -v
+WARNING:log_parser:Requested scan of J0154+1833 for 1440 sec at 1410 MHz [line=213] was not executed.
+WARNING:log_parser:Requested scan of J0154+1833 for 1440 sec at 1410 MHz [line=213]: parfile "/home/gpu/tzpar/0154+1853.par" does not match source "J0154+1833"
+WARNING:log_parser:Requested scan of J0154+1833 for 1440 sec at 430 MHz [line=221]: parfile "/home/gpu/tzpar/0154+1853.par" does not match source "J0154+1833"
+Request PSR J1640+2224 for 1290s at 1410MHz at linenumber    12 
+Request PSR J1640+2224 for 1290s at  430MHz at linenumber    24 
+Request PSR J1630+3550 for 1290s at  430MHz at linenumber    33 
+Request PSR J1630+3550 for 1290s at 1410MHz at linenumber    42 
+Request PSR J1745+1017 for 1290s at 2030MHz at linenumber    51 
+Request PSR J1745+1017 for 1290s at 1410MHz at linenumber    60 
+Request PSR J1853+1303 for 1290s at 1410MHz at linenumber    69 
+Request PSR J1853+1303 for 1290s at  430MHz at linenumber    78 
+Request PSR B1855+09   for 1290s at  430MHz at linenumber    87 
+Request PSR B1855+09   for 1290s at 1410MHz at linenumber    96 
+Request PSR J1911+1347 for 1290s at 1410MHz at linenumber   105 
+Request PSR J1911+1347 for 1290s at  430MHz at linenumber   114 
+Request PSR J2017+0603 for 1440s at 2030MHz at linenumber   123 
+Request PSR J2017+0603 for 1440s at 1410MHz at linenumber   132 
+Request PSR J2043+1711 for 1440s at 1410MHz at linenumber   141 
+Request PSR J2043+1711 for 1440s at  430MHz at linenumber   150 
+Request PSR J2234+0944 for 1440s at 2030MHz at linenumber   159 
+Request PSR J2234+0944 for 1440s at 1410MHz at linenumber   168 
+Request PSR J2317+1439 for 1440s at 1410MHz at linenumber   177 
+Request PSR J2317+1439 for 1440s at  430MHz at linenumber   186 
+Request PSR J0023+0923 for 1440s at  430MHz at linenumber   195 
+Request PSR J0023+0923 for 1440s at 1410MHz at linenumber   204 
+Request PSR J0154+1833 for 1440s at 1410MHz at linenumber   213 *
+Request PSR J0154+1833 for 1440s at  430MHz at linenumber   221 *
+```
+
+Makes sure all of the sessions will be executed, and that the `.par` files match the pulsars.  Those that don't pass are flagged in the output.
+
+Output can be directed to a file.
 
 ## CIMA Logs
 ```python
