@@ -67,34 +67,137 @@ Makes sure all of the sessions will be executed, and that the `.par` files match
 Output can be directed to a file.
 
 ## CIMA Logs
-```python
-import log_parser
-c=log_parser.CIMA_Log_Parser('p2780.cimalog_20200214')
 ```
-~~~
-### NANOGrav p2780 observation (11.4h elapsed; 7.3h observing; 20 scans)
-### 2020-Feb-22T04:31:37 - 2020-Feb-22T15:55:47
-..5977 sec --> Execute PSR J1640+2224 for    1s at 1410MHz at linenumber  1236 -  1243 (1290 sec requested) ---
-...490 sec --> Execute PSR J1640+2224 for 1427s at 1410MHz at linenumber  3376 -  3386 (1290 sec requested) 
-....86 sec --> Execute PSR J1640+2224 for 1428s at  430MHz at linenumber  4049 -  4057 (1290 sec requested) 
-...369 sec --> Execute PSR J1630+3550 for 1428s at  430MHz at linenumber  4736 -  4744 (1290 sec requested) 
-..1672 sec --> Execute PSR J1745+1017 for 1427s at 2030MHz at linenumber  5829 -  5837 (1290 sec requested) 
-...150 sec --> Execute PSR J1745+1017 for 1426s at 1410MHz at linenumber  6493 -  6501 (1290 sec requested) 
-...257 sec --> Execute PSR J1853+1303 for 1427s at 1410MHz at linenumber  7214 -  7222 (1290 sec requested) 
-....87 sec --> Execute PSR J1853+1303 for 1433s at  430MHz at linenumber  7808 -  7816 (1290 sec requested) 
-....83 sec --> Execute PSR B1855+09   for 1431s at  430MHz at linenumber  8495 -  8503 (1290 sec requested) 
-....79 sec --> Execute PSR B1855+09   for 1077s at 1410MHz at linenumber  9116 -  9124 (1290 sec requested) ---
-...134 sec --> Execute PSR J1911+1347 for 1216s at 1410MHz at linenumber  9852 -  9860 (1290 sec requested) 
-..1251 sec --> Execute PSR J2017+0603 for 1577s at 2030MHz at linenumber 10936 - 10944 (1440 sec requested) 
-..1490 sec --> Execute PSR J2043+1711 for 1576s at 1410MHz at linenumber 12072 - 12080 (1440 sec requested) 
-..1230 sec --> Execute PSR J2234+0944 for 1577s at 2030MHz at linenumber 13748 - 13756 (1440 sec requested) 
-...130 sec --> Execute PSR J2234+0944 for 1576s at 1410MHz at linenumber 14370 - 14378 (1440 sec requested) 
-...287 sec --> Execute PSR J2317+1439 for 1576s at 1410MHz at linenumber 15029 - 15037 (1440 sec requested) 
-....94 sec --> Execute PSR J2317+1439 for 1583s at  430MHz at linenumber 15623 - 15631 (1440 sec requested) 
-...242 sec --> Execute PSR J0023+0923 for 1582s at  430MHz at linenumber 16316 - 16324 (1440 sec requested) 
-....79 sec --> Execute PSR J0023+0923 for 1577s at 1410MHz at linenumber 16907 - 16915 (1440 sec requested) 
-...508 sec --> Execute PSR J0154+1833 for   10s at  430MHz at linenumber 17911 - 17919 (1440 sec requested) ---
-~~~
+parse_cimalog -h
+usage: parse_cimalog [-h] [--file FILE [FILE ...]] [--directory DIRECTORY]
+                     [--programs PROGRAMS [PROGRAMS ...]] [--days DAYS]
+                     [--tolerance TOLERANCE] [--email EMAIL] [--out OUT]
+                     [--verbose]
 
-## Dependencies:
-All standard python, 2 (>=2.7) or 3: re, logging, datetime, sys, json, collections, os
+Parse an Arecibo CIMA log file
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --file FILE [FILE ...], -f FILE [FILE ...]
+                        Name(s) of CIMA log file(s) (default: None)
+  --directory DIRECTORY, -d DIRECTORY
+                        Directory to search for log files (default: ./)
+  --programs PROGRAMS [PROGRAMS ...], -p PROGRAMS [PROGRAMS ...]
+                        Observing programs to look for (default: ['p2945',
+                        'p2780'])
+  --days DAYS, -t DAYS  Days in the past to look for log files (<=0: find all)
+                        (default: 1)
+  --tolerance TOLERANCE
+                        Tolerance for printing out exposure difference marks
+                        (default: 100)
+  --email EMAIL, -e EMAIL
+                        Send email with results (default: None)
+  --out OUT, -o OUT     Output destination (default: stdout)
+  --verbose, -v         Increase verbosity (default: 0)
+```
+
+```
+parse_cimalog -f examples/logs/p2780.cimalog_20200214 -v
+INFO:log_parser:Looking at examples/logs/p2780.cimalog_20200214 ...
+INFO:log_parser:CIMA session for p2780 with operator Daniel Padilla started at 2020-02-14 07:23:28
+INFO:log_parser:Starting to track PSR J1741+1351 at 2020-02-14 07:26:01
+INFO:log_parser:Ending tracking of J1741+1351 at 2020-02-14 07:28:19 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 07:28:40 line = 656
+INFO:log_parser:Ending pulsar observation at 2020-02-14 07:53:03 line = 903
+INFO:log_parser:Starting to track PSR J1741+1351 at 2020-02-14 07:54:13
+INFO:log_parser:Ending tracking of J1741+1351 at 2020-02-14 07:54:21 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 07:54:32 line = 1315
+INFO:log_parser:Ending pulsar observation at 2020-02-14 08:18:49 line = 1564
+INFO:log_parser:Starting to track PSR J1803+1358 at 2020-02-14 08:19:01
+INFO:log_parser:Ending tracking of J1803+1358 at 2020-02-14 08:20:40 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 08:20:47 line = 1909
+INFO:log_parser:Ending pulsar observation at 2020-02-14 08:45:05 line = 2156
+INFO:log_parser:Starting to track PSR J1803+1358 at 2020-02-14 08:46:01
+INFO:log_parser:Ending tracking of J1803+1358 at 2020-02-14 08:46:09 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 08:46:26 line = 2595
+INFO:log_parser:Ending pulsar observation at 2020-02-14 09:10:47 line = 2842
+INFO:log_parser:Starting to track PSR J1923+2515 at 2020-02-14 09:10:58
+INFO:log_parser:Ending tracking of J1923+2515 at 2020-02-14 09:17:43 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 09:18:00 line = 3215
+INFO:log_parser:Ending pulsar observation at 2020-02-14 09:41:50 line = 3462
+INFO:log_parser:Starting to track PSR J1923+2515 at 2020-02-14 09:42:53
+INFO:log_parser:Ending tracking of J1923+2515 at 2020-02-14 09:43:01 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 09:43:12 line = 3874
+INFO:log_parser:Ending pulsar observation at 2020-02-14 10:06:59 line = 4123
+INFO:log_parser:Starting to track PSR B1937+21 at 2020-02-14 10:07:10
+INFO:log_parser:Ending tracking of B1937+21 at 2020-02-14 10:09:06 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 10:09:13 line = 4468
+INFO:log_parser:Ending pulsar observation at 2020-02-14 10:28:09 line = 4715
+INFO:log_parser:Starting to track PSR J1946+3417 at 2020-02-14 10:28:20
+INFO:log_parser:Ending tracking of J1946+3417 at 2020-02-14 10:33:35 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 10:33:46 line = 5060
+INFO:log_parser:Ending pulsar observation at 2020-02-14 11:20:13 line = 5309
+INFO:log_parser:Starting to track PSR B1953+29 at 2020-02-14 11:20:24
+INFO:log_parser:Ending tracking of B1953+29 at 2020-02-14 11:22:36 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 11:22:46 line = 5654
+INFO:log_parser:Ending pulsar observation at 2020-02-14 11:46:33 line = 5903
+INFO:log_parser:Starting to track PSR B1953+29 at 2020-02-14 11:47:31
+INFO:log_parser:Ending tracking of B1953+29 at 2020-02-14 11:47:39 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 11:47:59 line = 6342
+WARNING:log_parser:Aborting current scan on target PSR B1953+29 at 2020-02-14 12:07:30 at line 6641 (started at 2020-02-14 11:47:31; tracking duration 1199s)
+INFO:log_parser:Ending pulsar observation at 2020-02-14 12:07:38 line = 6675
+INFO:log_parser:Starting to track PSR J2022+2534 at 2020-02-14 12:08:45
+INFO:log_parser:Ending tracking of J2022+2534 at 2020-02-14 12:10:47 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 12:10:59 line = 7109
+WARNING:log_parser:Aborting current scan on target PSR J2022+2534 at 2020-02-14 12:33:37 at line 7376 (started at 2020-02-14 12:08:45; tracking duration 1492s)
+INFO:log_parser:Ending pulsar observation at 2020-02-14 12:33:46 line = 7408
+INFO:log_parser:Starting to track PSR J2214+3000 at 2020-02-14 12:34:03
+INFO:log_parser:Ending tracking of J2214+3000 at 2020-02-14 12:38:00 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 12:38:10 line = 7770
+INFO:log_parser:Ending pulsar observation at 2020-02-14 13:29:37 line = 8019
+INFO:log_parser:Starting to track PSR J2229+2643 at 2020-02-14 13:29:48
+INFO:log_parser:Ending tracking of J2229+2643 at 2020-02-14 13:31:39 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 13:31:46 line = 8364
+INFO:log_parser:Ending pulsar observation at 2020-02-14 13:58:02 line = 8611
+INFO:log_parser:Starting to track PSR J2229+2643 at 2020-02-14 13:59:03
+INFO:log_parser:Ending tracking of J2229+2643 at 2020-02-14 13:59:10 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 13:59:30 line = 9051
+INFO:log_parser:Ending pulsar observation at 2020-02-14 14:25:52 line = 9298
+INFO:log_parser:Starting to track PSR J2322+2057 at 2020-02-14 14:26:03
+INFO:log_parser:Ending tracking of J2322+2057 at 2020-02-14 14:31:11 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 14:31:32 line = 9673
+INFO:log_parser:Ending pulsar observation at 2020-02-14 14:57:55 line = 9920
+INFO:log_parser:Starting to track PSR J2322+2057 at 2020-02-14 14:58:58
+INFO:log_parser:Ending tracking of J2322+2057 at 2020-02-14 14:59:06 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 14:59:14 line = 10332
+INFO:log_parser:Ending pulsar observation at 2020-02-14 15:25:31 line = 10579
+INFO:log_parser:Starting to track PSR J0030+0451 at 2020-02-14 15:25:42
+INFO:log_parser:Ending tracking of J0030+0451 at 2020-02-14 15:29:42 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 15:29:51 line = 10928
+INFO:log_parser:Ending pulsar observation at 2020-02-14 15:56:07 line = 11175
+INFO:log_parser:Starting to track PSR J0030+0451 at 2020-02-14 15:57:07
+INFO:log_parser:Ending tracking of J0030+0451 at 2020-02-14 15:57:14 with status OK
+INFO:log_parser:Starting pulsar observation (std) at 2020-02-14 15:57:32 line = 11615
+INFO:log_parser:Ending pulsar observation at 2020-02-14 16:24:03 line = 11931
+### Report for: examples/logs/p2780.cimalog_20200214
+### NANOGrav p2780 observation (9.0h elapsed; 8.1h observing; 18 scans)
+### 2020-02-14 07:23:28 - 2020-02-14 16:24:17
+ 312.0 sec --> Execute PSR J1741+1351 (std) for 1463s at  430MHz at linenumber   656 (1320.0 sec requested) +
+  89.0 sec --> Execute PSR J1741+1351 (std) for 1457s at 1410MHz at linenumber  1315 (1320.0 sec requested) +
+ 118.0 sec --> Execute PSR J1803+1358 (std) for 1458s at 1410MHz at linenumber  1909 (1320.0 sec requested) +
+  81.0 sec --> Execute PSR J1803+1358 (std) for 1461s at  430MHz at linenumber  2595 (1320.0 sec requested) +
+ 433.0 sec --> Execute PSR J1923+2515 (std) for 1430s at  430MHz at linenumber  3215 (1290.0 sec requested) +
+  82.0 sec --> Execute PSR J1923+2515 (std) for 1427s at 1410MHz at linenumber  3874 (1290.0 sec requested) +
+ 134.0 sec --> Execute PSR B1937+21   (std) for 1136s at 1410MHz at linenumber  4468 (1000.0 sec requested) +
+ 337.0 sec --> Execute PSR J1946+3417 (std) for 2787s at 1410MHz at linenumber  5060 (2650.0 sec requested) +
+ 153.0 sec --> Execute PSR B1953+29   (std) for 1427s at 1410MHz at linenumber  5654 (1290.0 sec requested) +
+  86.0 sec --> Execute PSR B1953+29   (std) for 1179s at  430MHz at linenumber  6342 (1290.0 sec requested) -
+ 201.0 sec --> Execute PSR J2022+2534 (std) for 1367s at 1410MHz at linenumber  7109 (2650.0 sec requested) ------------
+ 264.0 sec --> Execute PSR J2214+3000 (std) for 3087s at 1410MHz at linenumber  7770 (2950.0 sec requested) +
+ 129.0 sec --> Execute PSR J2229+2643 (std) for 1576s at 1410MHz at linenumber  8364 (1440.0 sec requested) +
+  88.0 sec --> Execute PSR J2229+2643 (std) for 1582s at  430MHz at linenumber  9051 (1440.0 sec requested) +
+ 340.0 sec --> Execute PSR J2322+2057 (std) for 1583s at  430MHz at linenumber  9673 (1440.0 sec requested) +
+  79.0 sec --> Execute PSR J2322+2057 (std) for 1577s at 1410MHz at linenumber 10332 (1440.0 sec requested) +
+ 260.0 sec --> Execute PSR J0030+0451 (std) for 1576s at 1410MHz at linenumber 10928 (1440.0 sec requested) +
+  85.0 sec --> Execute PSR J0030+0451 (std) for 1591s at  430MHz at linenumber 11615 (1440.0 sec requested) +
+```
+
+Options:
+* Can specify files directly, or by looking back `--days` in a directory
+* Will only look for logs of the specified programs
+* Can write to a file instead of `stdout`
