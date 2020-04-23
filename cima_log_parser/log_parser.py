@@ -569,6 +569,9 @@ class CIMAPulsarObservationLog(object):
             # end of observation block
             elif log_entry.levelname == "ALERT" and log_entry.name == "CIMA-exit_cima":
                 log.end_time = log_entry.datetime
+                logger.debug('Exiting CIMA at %s line %d',
+                             log.end_time,
+                             line_num)
 
             # initialisation of a pulsar observation
             # no elif as execution resumes here after parsing the stored commands
