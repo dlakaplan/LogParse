@@ -73,6 +73,7 @@ def parse_store_command_file_line(log_message):
     else:
         return None
 
+
 def to_mjd(dt):
     """
     Converts a given datetime object to modified Julian date.
@@ -89,13 +90,27 @@ def to_mjd(dt):
 
     https://github.com/dannyzed/julian/blob/master/julian/julian.py
     """
-    a = math.floor((14-dt.month)/12)
+    a = math.floor((14 - dt.month) / 12)
     y = dt.year + 4800 - a
-    m = dt.month + 12*a - 3
+    m = dt.month + 12 * a - 3
 
-    jdn = dt.day + math.floor((153*m + 2)/5) + 365*y + math.floor(y/4) - math.floor(y/100) + math.floor(y/400) - 32045
+    jdn = (
+        dt.day
+        + math.floor((153 * m + 2) / 5)
+        + 365 * y
+        + math.floor(y / 4)
+        - math.floor(y / 100)
+        + math.floor(y / 400)
+        - 32045
+    )
 
-    jd = jdn + (dt.hour - 12) / 24 + dt.minute / 1440 + dt.second / 86400 + dt.microsecond / 86400000000
+    jd = (
+        jdn
+        + (dt.hour - 12) / 24
+        + dt.minute / 1440
+        + dt.second / 86400
+        + dt.microsecond / 86400000000
+    )
     return jd - 2400000.5
 
 
@@ -134,7 +149,7 @@ class CIMAPulsarObservationExecution(object):
         self.end_time = None
         self.logfile_start_line = None
         self.logfile_end_line = None
-        self.type = 'std'
+        self.type = "std"
         self.scan_numbers = []
 
     @property
@@ -168,11 +183,11 @@ class CIMAPulsarScan(object):
     @property
     def start_time(self):
         return self.execution.start_time
-    
+
     @property
     def end_time(self):
         return self.execution.end_time
-    
+
     @property
     def executed_duration(self):
         return self.execution.end_time - self.execution.start_time
@@ -241,28 +256,20 @@ class CIMAPulsarObservationLog(object):
                 self._scans.append(scan)
         # TODO warn if any properties are still None
 
-
     def construct_filenames(self, scan):
         # which is the appropripate MJD to use?
         # is it the start time? end time?  Can it change for a given source?
         mjd = to_mjd(scan.start_time)
         filenames = []
         for scan_number in scan.execution.scan_numbers:
-            filename = 'puppi_{:d}_{}_{:04d}'.format(
-                int(mjd),
-                scan.source,
-                scan_number,
-                )
+            filename = "puppi_{:d}_{}_{:04d}".format(
+                int(mjd), scan.source, scan_number,
+            )
             if self.data_destination is not None:
-                filenames.append(
-                    os.path.join(self.data_destination,
-                                 filename,
-                                 )
-                    )
+                filenames.append(os.path.join(self.data_destination, filename,))
             else:
                 filenames.append(filename)
         return filenames
-
 
     def print_results(self, output=sys.stdout):
         print(
@@ -270,7 +277,7 @@ class CIMAPulsarObservationLog(object):
         )
         if self.start_time is None:
             return
-        
+
         print(
             "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {} scans)".format(
                 self.project,
@@ -283,7 +290,7 @@ class CIMAPulsarObservationLog(object):
 
         print("### {} - {}".format(self.start_time, self.end_time), file=output)
         if self.data_destination is None:
-            logger.warning('Data destination is not set')
+            logger.warning("Data destination is not set")
         self._scans.sort(key=lambda x: x.execution.start_time)
         for scan_prev, scan_current in zip([None] + self._scans, self._scans):
             if scan_prev is None:
@@ -321,11 +328,12 @@ class CIMAPulsarObservationLog(object):
                 ),
                 file=output,
             )
-            print("\tWriting to {}".format(
-                ', '.join(self.construct_filenames(scan_current)),
+            print(
+                "\tWriting to {}".format(
+                    ", ".join(self.construct_filenames(scan_current)),
                 ),
-                  file=output,
-                  )
+                file=output,
+            )
 
     @property
     def start_time(self):
@@ -438,7 +446,7 @@ class CIMAPulsarObservationLog(object):
         self._command_file = value
 
     @staticmethod
-    def parse_cima_logfile(filename, start_line = 0, tolerance = 100):
+    def parse_cima_logfile(filename, start_line=0, tolerance=100):
         """
             Parse a full CIMA log file.
 
@@ -464,9 +472,9 @@ class CIMAPulsarObservationLog(object):
         line_iterator = f.__iter__()
         line_num = 0
         if start_line > 0:
-            logger.info('Starting at line %d',
-                        start_line,
-                        )
+            logger.info(
+                "Starting at line %d", start_line,
+            )
         while line_num < start_line:
             next(line_iterator)
             line_num += 1
@@ -562,12 +570,11 @@ class CIMAPulsarObservationLog(object):
                             # for calibration
                             request.pulsaron_command_line_number = int(cmd_line_num)
                             request.pulsaron_executive_line_number = int(exec_line_num)
-                            match = re.match(r'EXEC ponoffcal "(\d+)".*',
-                                             cmd)
+                            match = re.match(r'EXEC ponoffcal "(\d+)".*', cmd)
                             if match:
                                 request.duration = datetime.timedelta(
                                     seconds=int(match.groups()[0]),
-                                    )
+                                )
                             log.requested_commands[
                                 request.pulsaron_executive_line_number
                             ] = request
@@ -580,11 +587,9 @@ class CIMAPulsarObservationLog(object):
             elif log_entry.levelname == "ALERT" and log_entry.name == "CIMA-exit_cima":
                 log.end_time = log_entry.datetime
                 log.end_line = line_num
-                logger.debug('Exiting CIMA at %s line %d',
-                             log.end_time,
-                             line_num)
+                logger.debug("Exiting CIMA at %s line %d", log.end_time, line_num)
                 break
-            
+
             # initialisation of a pulsar observation
             # no elif as execution resumes here after parsing the stored commands
             if (
@@ -639,12 +644,14 @@ class CIMAPulsarObservationLog(object):
                 execution.start_time = log_entry.datetime
                 execution.logfile_end_line = line_num
                 log.executed_commands[exec_line_num] = execution
-                if 'calibration' in log_entry.message:
-                    execution.type='cal'
-                logger.info("Starting pulsar observation (%s) at %s line = %d",
-                            execution.type,
-                            log_entry.datetime,
-                            line_num)
+                if "calibration" in log_entry.message:
+                    execution.type = "cal"
+                logger.info(
+                    "Starting pulsar observation (%s) at %s line = %d",
+                    execution.type,
+                    log_entry.datetime,
+                    line_num,
+                )
             # end of pulsar observation
             elif (
                 log_entry.levelname == "END"
@@ -652,10 +659,11 @@ class CIMAPulsarObservationLog(object):
                 and "pulsar on" in log_entry.message
             ):
                 execution.end_time = log_entry.datetime
-                logger.info("Ending pulsar observation at %s line = %d",
-                            log_entry.datetime,
-                            line_num,
-                            )
+                logger.info(
+                    "Ending pulsar observation at %s line = %d",
+                    log_entry.datetime,
+                    line_num,
+                )
 
             # pick up the scan id to get the filename
             elif (
@@ -664,10 +672,11 @@ class CIMAPulsarObservationLog(object):
                 and "Coherent mode Started" in log_entry.message
             ):
                 execution.scan_numbers.append(int(log_entry.message.split()[-1]))
-                logger.info("Adding scan number %d line = %d",
-                            execution.scan_numbers[-1],
-                            line_num,
-                            )
+                logger.info(
+                    "Adding scan number %d line = %d",
+                    execution.scan_numbers[-1],
+                    line_num,
+                )
 
             # start a new tracking (really slewing) task
             elif log_entry.levelname == "BEGIN" and log_entry.name == "begin_task":
