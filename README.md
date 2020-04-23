@@ -90,8 +90,6 @@ optional arguments:
   --tolerance TOLERANCE
                         Tolerance for printing out exposure difference marks
                         (default: 100)
-  --email EMAIL, -e EMAIL
-                        Send email with results (default: None)
   --out OUT, -o OUT     Output destination (default: stdout)
   --verbose, -v         Increase verbosity (default: 0)
 ```
