@@ -222,6 +222,7 @@ class CIMAPulsarObservationLog(object):
         # self.tolerance = datetime.timedelta(seconds=tolerance)
         self.tolerance = tolerance
         self._filename = None
+        self.end_line = None
 
     def process_commands(self):
         for exec_line_num, request in self.requested_commands.items():
@@ -267,7 +268,9 @@ class CIMAPulsarObservationLog(object):
         print(
             "### Report for: {}".format(self._filename,), file=output,
         )
-
+        if self.start_time is None:
+            return
+        
         print(
             "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {} scans)".format(
                 self.project,
@@ -435,7 +438,7 @@ class CIMAPulsarObservationLog(object):
         self._command_file = value
 
     @staticmethod
-    def parse_cima_logfile(filename, tolerance=100):
+    def parse_cima_logfile(filename, start_line = 0, tolerance = 100):
         """
             Parse a full CIMA log file.
 
@@ -460,6 +463,13 @@ class CIMAPulsarObservationLog(object):
         f = open(filename)
         line_iterator = f.__iter__()
         line_num = 0
+        if start_line > 0:
+            logger.info('Starting at line %d',
+                        start_line,
+                        )
+        while line_num < start_line:
+            next(line_iterator)
+            line_num += 1
         slewing = None
         for line in line_iterator:
             log_entry = parse_log_line(line.strip())
@@ -569,10 +579,12 @@ class CIMAPulsarObservationLog(object):
             # end of observation block
             elif log_entry.levelname == "ALERT" and log_entry.name == "CIMA-exit_cima":
                 log.end_time = log_entry.datetime
+                log.end_line = line_num
                 logger.debug('Exiting CIMA at %s line %d',
                              log.end_time,
                              line_num)
-
+                break
+            
             # initialisation of a pulsar observation
             # no elif as execution resumes here after parsing the stored commands
             if (

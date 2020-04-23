@@ -94,10 +94,23 @@ def main():
     else:
         good_files=args.file
 
+
     for file in good_files:
-        log = log_parser.CIMAPulsarObservationLog.parse_cima_logfile(file,
-                                                                     tolerance=args.tolerance)
-        log.print_results(output = args.out)
+        start_line = 0
+        logs=[]
+        while True:
+            log = log_parser.CIMAPulsarObservationLog.parse_cima_logfile(file,
+                                                                         start_line = start_line,
+                                                                         tolerance=args.tolerance,
+                                                                         )
+            if log.start_time is None:
+                break
+            start_line = log.end_line + 1
+            logs.append(log)
+            
+
+        for log in logs:            
+            log.print_results(output = args.out)
     
 if __name__ == "__main__":
     main()
