@@ -103,6 +103,7 @@ class CIMAPulsarObservationRequest(object):
 class CIMAPulsarObservationExecution(object):
     def __init__(self):
         self.request = None
+        self.slewing = None
         self.start_time = None
         self.end_time = None
         self.logfile_start_line = None
@@ -114,7 +115,7 @@ class CIMAPulsarObservationExecution(object):
         return self.end_time - self.start_time
 
 
-class CIMATrackingExecution(object):
+class CIMASlewingExecution(object):
     def __init__(self):
         self.source = None
         self.start_time = None
@@ -123,11 +124,19 @@ class CIMATrackingExecution(object):
         self.logfile_end_line = None
         self.status = None
 
+    @property
+    def duration(self):
+        return self.end_time - self.start_time
+
 
 class CIMAPulsarScan(object):
     def __init__(self):
         self.request = None
         self.execution = None
+
+    @property
+    def slew_duration(self):
+        return self.execution.slewing.end_time - self.execution.slewing.start_time
 
     @property
     def executed_duration(self):
@@ -240,10 +249,11 @@ class CIMAPulsarObservationLog(object):
                 note = "".join(note)
 
             print(
-                "{:>6} sec --> {} ({} sec requested) {}".format(
-                    time_gap.total_seconds(),
+                "{:>6} sec ({:>6} sec slewing) --> {} ({} sec requested) {}".format(
+                    int(time_gap.total_seconds()),
+                    int(scan_current.execution.slewing.duration.total_seconds()),
                     scan_current,
-                    scan_current.requested_duration.total_seconds(),
+                    int(scan_current.requested_duration.total_seconds()),
                     note,
                 ),
                 file=output,
@@ -385,7 +395,7 @@ class CIMAPulsarObservationLog(object):
         f = open(filename)
         line_iterator = f.__iter__()
         line_num = 0
-        tracking = None
+        slewing = None
         for line in line_iterator:
             log_entry = parse_log_line(line.strip())
             if log_entry is None:
@@ -510,6 +520,7 @@ class CIMAPulsarObservationLog(object):
                     exec_line_num = int(match.group("executive_line_num"))
                     execution = CIMAPulsarObservationExecution()
                     execution.request = log.requested_commands[exec_line_num]
+                    execution.slewing = slewing
                     execution.logfile_start_line = line_num
                 else:
                     logger.error(
@@ -563,20 +574,21 @@ class CIMAPulsarObservationLog(object):
                 execution.end_time = log_entry.datetime
                 logger.info("Ending pulsar observation at %s line = %d", log_entry.datetime, line_num)
 
-            # start a new tracking task
+            # start a new tracking (really slewing) task
             elif log_entry.levelname == "BEGIN" and log_entry.name == "begin_task":
                 match = re.match(
                     r"Starting task 'tracking source '(.*?)''", log_entry.message,
                 )
                 if match:
-                    tracking = CIMATrackingExecution()
-                    tracking.logfile_start_line = line_num
-                    tracking.start_time = log_entry.datetime
-                    tracking.source = match.groups()[0]
+                    slewing = CIMASlewingExecution()
+                    slewing.logfile_start_line = line_num
+                    slewing.start_time = log_entry.datetime
+                    slewing.source = match.groups()[0]
                     logger.info(
-                        "Starting to track PSR %s at %s",
-                        tracking.source,
-                        tracking.start_time,
+                        "Starting to track PSR %s at %s line = %d",
+                        slewing.source,
+                        slewing.start_time,
+                        line_num,
                     )
             # abort part-way through
             elif (
@@ -584,37 +596,39 @@ class CIMAPulsarObservationLog(object):
                 and log_entry.name == "exec_msg"
                 and "abort_task skip" in log_entry.message
             ):
-                if tracking is not None:
+                if slewing is not None:
                     logger.warning(
                         "Aborting current scan on target PSR %s at %s at line %d (started at %s; tracking duration %ds)",
-                        tracking.source,
+                        slewing.source,
                         log_entry.datetime,
                         line_num,
-                        tracking.start_time,
-                        (log_entry.datetime - tracking.start_time).total_seconds(),
+                        slewing.start_time,
+                        (log_entry.datetime - slewing.start_time).total_seconds(),
                     )
-            # end tracking in good standing
+            # end slewing in good standing
             elif log_entry.levelname == "END" and log_entry.name == "end_task":
                 match = re.match(
                     "Finishing task 'tracking source '(?P<source>.*?)'' with status '(?P<status>.*?)'",
                     log_entry.message,
                 )
                 if match:
-                    tracking.end_time = log_entry.datetime
-                    tracking.logfile_end_line = line_num
+                    slewing.end_time = log_entry.datetime
+                    slewing.logfile_end_line = line_num
                     if match.group("status") == "OK":
                         logger.info(
-                            "Ending tracking of %s at %s with status %s",
+                            "Ending slewing to %s at %s with status '%s' line = %d",
                             match.group("source"),
                             log_entry.datetime,
                             match.group("status"),
+                            line_num,
                         )
                     else:
                         logger.warning(
-                            "Ending tracking of %s at %s with status %s",
+                            "Ending slewing to %s at %s with status '%s' line = %d",
                             match.group("source"),
                             log_entry.datetime,
                             match.group("status"),
+                            line_num,
                         )
 
             line_num += 1
