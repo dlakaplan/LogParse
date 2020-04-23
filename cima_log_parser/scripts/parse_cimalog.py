@@ -38,10 +38,10 @@ def main():
                         type=int,
                         default=100,
                         help='Tolerance for printing out exposure difference marks')
-    parser.add_argument('--email', '-e',
-                        type=str,
-                        default=None,
-                        help='Send email with results')
+    #parser.add_argument('--email', '-e',
+    #                    type=str,
+    #                    default=None,
+    #                    help='Send email with results')
     parser.add_argument('--out', '-o',
                         default='stdout',
                         type=str,
