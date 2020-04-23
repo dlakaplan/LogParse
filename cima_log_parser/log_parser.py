@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 
+import math
 import re
 import logging
 import datetime
@@ -72,6 +73,31 @@ def parse_store_command_file_line(log_message):
     else:
         return None
 
+def to_mjd(dt):
+    """
+    Converts a given datetime object to modified Julian date.
+    Algorithm is copied from https://en.wikipedia.org/wiki/Julian_day
+    All variable names are consistent with the notation on the wiki page.
+    Parameters
+    ----------
+    fmt
+    dt: datetime
+        Datetime object to convert to MJD
+    Returns
+    -------
+    mjd: float
+
+    https://github.com/dannyzed/julian/blob/master/julian/julian.py
+    """
+    a = math.floor((14-dt.month)/12)
+    y = dt.year + 4800 - a
+    m = dt.month + 12*a - 3
+
+    jdn = dt.day + math.floor((153*m + 2)/5) + 365*y + math.floor(y/4) - math.floor(y/100) + math.floor(y/400) - 32045
+
+    jd = jdn + (dt.hour - 12) / 24 + dt.minute / 1440 + dt.second / 86400 + dt.microsecond / 86400000000
+    return jd - 2400000.5
+
 
 class CIMAPulsarObservationRequest(object):
     def __init__(self):
@@ -109,6 +135,7 @@ class CIMAPulsarObservationExecution(object):
         self.logfile_start_line = None
         self.logfile_end_line = None
         self.type = 'std'
+        self.scan_numbers = []
 
     @property
     def duration(self):
@@ -138,6 +165,14 @@ class CIMAPulsarScan(object):
     def slew_duration(self):
         return self.execution.slewing.end_time - self.execution.slewing.start_time
 
+    @property
+    def start_time(self):
+        return self.execution.start_time
+    
+    @property
+    def end_time(self):
+        return self.execution.end_time
+    
     @property
     def executed_duration(self):
         return self.execution.end_time - self.execution.start_time
@@ -205,6 +240,29 @@ class CIMAPulsarObservationLog(object):
                 self._scans.append(scan)
         # TODO warn if any properties are still None
 
+
+    def construct_filenames(self, scan):
+        # which is the appropripate MJD to use?
+        # is it the start time? end time?  Can it change for a given source?
+        mjd = to_mjd(scan.start_time)
+        filenames = []
+        for scan_number in scan.execution.scan_numbers:
+            filename = 'puppi_{:d}_{}_{:04d}'.format(
+                int(mjd),
+                scan.source,
+                scan_number,
+                )
+            if self.data_destination is not None:
+                filenames.append(
+                    os.path.join(self.data_destination,
+                                 filename,
+                                 )
+                    )
+            else:
+                filenames.append(filename)
+        return filenames
+
+
     def print_results(self, output=sys.stdout):
         print(
             "### Report for: {}".format(self._filename,), file=output,
@@ -221,6 +279,8 @@ class CIMAPulsarObservationLog(object):
         )
 
         print("### {} - {}".format(self.start_time, self.end_time), file=output)
+        if self.data_destination is None:
+            logger.warning('Data destination is not set')
         self._scans.sort(key=lambda x: x.execution.start_time)
         for scan_prev, scan_current in zip([None] + self._scans, self._scans):
             if scan_prev is None:
@@ -258,6 +318,11 @@ class CIMAPulsarObservationLog(object):
                 ),
                 file=output,
             )
+            print("\tWriting to {}".format(
+                ', '.join(self.construct_filenames(scan_current)),
+                ),
+                  file=output,
+                  )
 
     @property
     def start_time(self):
@@ -421,7 +486,7 @@ class CIMAPulsarObservationLog(object):
                 )
             # where were the data written
             elif (
-                log_entry.levelname == "LOG4"
+                "LOG" in log_entry.levelname
                 and log_entry.name == "vw_send"
                 and "To DATATAKING: cd" in log_entry.message
             ):
@@ -572,7 +637,22 @@ class CIMAPulsarObservationLog(object):
                 and "pulsar on" in log_entry.message
             ):
                 execution.end_time = log_entry.datetime
-                logger.info("Ending pulsar observation at %s line = %d", log_entry.datetime, line_num)
+                logger.info("Ending pulsar observation at %s line = %d",
+                            log_entry.datetime,
+                            line_num,
+                            )
+
+            # pick up the scan id to get the filename
+            elif (
+                log_entry.levelname == "WARNING"
+                and log_entry.name == "from_puppi"
+                and "Coherent mode Started" in log_entry.message
+            ):
+                execution.scan_numbers.append(int(log_entry.message.split()[-1]))
+                logger.info("Adding scan number %d line = %d",
+                            execution.scan_numbers[-1],
+                            line_num,
+                            )
 
             # start a new tracking (really slewing) task
             elif log_entry.levelname == "BEGIN" and log_entry.name == "begin_task":
