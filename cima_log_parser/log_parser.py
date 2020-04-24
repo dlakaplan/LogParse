@@ -152,6 +152,8 @@ class CIMAPulsarObservationExecution(object):
         self.logfile_end_line = None
         self.type = "std"
         self.scan_numbers = []
+        self.scan_cals = []
+        self.winking_cal = False
 
     @property
     def duration(self):
@@ -262,14 +264,15 @@ class CIMAPulsarObservationLog(object):
         # is it the start time? end time?  Can it change for a given source?
         mjd = to_mjd(scan.start_time)
         filenames = []
-        for scan_number in scan.execution.scan_numbers:
+        for scan_number,scan_cal in zip(scan.execution.scan_numbers,
+                                        scan.execution.scan_cals):
             filename = "puppi_{:d}_{}_{:04d}".format(
                 int(mjd), scan.source, scan_number,
             )
-            if self.data_destination is not None:
-                filenames.append(os.path.join(self.data_destination, filename,))
-            else:
-                filenames.append(filename)
+            if scan_cal:
+                filename += '_cal'                
+            filenames.append(filename)
+            
         return filenames
 
     def print_results(self, output=sys.stdout):
@@ -673,11 +676,36 @@ class CIMAPulsarObservationLog(object):
                 and "Coherent mode Started" in log_entry.message
             ):
                 execution.scan_numbers.append(int(log_entry.message.split()[-1]))
+                execution.scan_cals.append(
+                    execution.winking_cal,
+                    )
                 logger.info(
-                    "Adding scan number %d line = %d",
+                    "Adding scan number %d (cal = %s) line = %d",
                     execution.scan_numbers[-1],
+                    execution.scan_cals[-1],
                     line_num,
                 )
+
+            # look for whether the winking cal is on or not (toggle)
+            elif (
+                log_entry.levelname == "INFO2"
+                and log_entry.name == "winking_cal"
+                and "25 Hz calibrator switched" in log_entry.message
+            ):
+                match = re.match(
+                    r"25 Hz calibrator switched (?P<state>\w+)", log_entry.message,
+                )
+                if match:
+                    if match.group("state") == "ON":                        
+                        execution.winking_cal = True
+                    else:
+                        execution.winking_cal = False                        
+                logger.debug(
+                    "Winking cal = %s line = %d",
+                    execution.winking_cal,
+                    line_num,
+                )
+
 
             # start a new tracking (really slewing) task
             elif log_entry.levelname == "BEGIN" and log_entry.name == "begin_task":
