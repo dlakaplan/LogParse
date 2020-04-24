@@ -240,6 +240,7 @@ class CIMAPulsarObservationLog(object):
         # self.tolerance = datetime.timedelta(seconds=tolerance)
         self.tolerance = tolerance
         self._filename = None
+        self._modtime = None
         self.end_line = None
 
     def process_commands(self):
@@ -264,15 +265,16 @@ class CIMAPulsarObservationLog(object):
         # is it the start time? end time?  Can it change for a given source?
         mjd = to_mjd(scan.start_time)
         filenames = []
-        for scan_number,scan_cal in zip(scan.execution.scan_numbers,
-                                        scan.execution.scan_cals):
+        for scan_number, scan_cal in zip(
+            scan.execution.scan_numbers, scan.execution.scan_cals
+        ):
             filename = "puppi_{:d}_{}_{:04d}".format(
                 int(mjd), scan.source, scan_number,
             )
             if scan_cal:
-                filename += '_cal'                
+                filename += "_cal"
             filenames.append(filename)
-            
+
         return filenames
 
     def print_results(self, output=sys.stdout):
@@ -472,6 +474,12 @@ class CIMAPulsarObservationLog(object):
         log = CIMAPulsarObservationLog(tolerance=tolerance)
         log._filename = filename
         parsing_stored_commands = False
+        log._modtime = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+        if datetime.datetime.now() - log._modtime < datetime.timedelta(seconds=60):
+            logger.warning(
+                "File modification time was only %d sec ago...File may still be in progress.",
+                (datetime.datetime.now() - log._modtime).total_seconds(),
+            )
         f = open(filename)
         line_iterator = f.__iter__()
         line_num = 0
@@ -676,9 +684,7 @@ class CIMAPulsarObservationLog(object):
                 and "Coherent mode Started" in log_entry.message
             ):
                 execution.scan_numbers.append(int(log_entry.message.split()[-1]))
-                execution.scan_cals.append(
-                    execution.winking_cal,
-                    )
+                execution.scan_cals.append(execution.winking_cal,)
                 logger.info(
                     "Adding scan number %d (cal = %s) line = %d",
                     execution.scan_numbers[-1],
@@ -696,16 +702,13 @@ class CIMAPulsarObservationLog(object):
                     r"25 Hz calibrator switched (?P<state>\w+)", log_entry.message,
                 )
                 if match:
-                    if match.group("state") == "ON":                        
+                    if match.group("state") == "ON":
                         execution.winking_cal = True
                     else:
-                        execution.winking_cal = False                        
+                        execution.winking_cal = False
                 logger.debug(
-                    "Winking cal = %s line = %d",
-                    execution.winking_cal,
-                    line_num,
+                    "Winking cal = %s line = %d", execution.winking_cal, line_num,
                 )
-
 
             # start a new tracking (really slewing) task
             elif log_entry.levelname == "BEGIN" and log_entry.name == "begin_task":
@@ -809,9 +812,9 @@ class CIMAPulsarObservationPlans(object):
                     '"', ""
                 )
             elif cmd.startswith("EXEC") and "wait_puppi_temporary" in cmd:
-                logger.warning('Uncommented power check on line %d',
-                               int(line_number),
-                               )
+                logger.warning(
+                    "Uncommented power check on line %d", int(line_number),
+                )
                 commands.requested_commands[-1].power_check = True
             elif cmd.startswith("PULSARON"):
                 # this terminates an observing block.
