@@ -124,6 +124,7 @@ class CIMAPulsarObservationRequest(object):
         self.pulsaron_command_line_number = None
         self.pulsaron_executive_line_number = None
         self.parfile = None
+        self.power_check = False
 
     @property
     def executed(self):
@@ -138,7 +139,7 @@ class CIMAPulsarObservationRequest(object):
 
     @property
     def parses(self):
-        return self.executed and self.source_matches
+        return self.executed and self.source_matches and not self.power_check
 
 
 class CIMAPulsarObservationExecution(object):
@@ -779,6 +780,11 @@ class CIMAPulsarObservationPlans(object):
                 commands.requested_commands[-1].parfile = cmd.split()[-1].replace(
                     '"', ""
                 )
+            elif cmd.startswith("EXEC") and "wait_puppi_temporary" in cmd:
+                logger.warning('Uncommented power check on line %d',
+                               int(line_number),
+                               )
+                commands.requested_commands[-1].power_check = True
             elif cmd.startswith("PULSARON"):
                 # this terminates an observing block.
                 # if not present the pulsaron_command_line_number
