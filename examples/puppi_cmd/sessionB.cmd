@@ -10,6 +10,15 @@
 
 catalog nanograv.cat
 
+LOAD cima_control_puppi_430.conf
+SEEK J1640+2224
+EXEC change_puppi_parfile "/home/gpu/tzpar/1640+2224.par"
+ADJUSTPOWER
+EXEC change_puppi_dumptime "FOLD" "1" "2048"
+EXEC change_puppi_dumptime "CAL" "1" "2048"
+SETUP pulsaron secs=1290 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
+PULSARON
+
 LOAD cima_control_puppi_1410.conf
 EXEC vw_send "pnt wrap -1"
 SEEK J1640+2224
@@ -22,30 +31,21 @@ ADJUSTPOWER
 SETUP pulsaron secs=1290 loops=1 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
 PULSARON
 
-LOAD cima_control_puppi_430.conf
-SEEK J1640+2224
-EXEC change_puppi_parfile "/home/gpu/tzpar/1640+2224.par"
-ADJUSTPOWER
-EXEC change_puppi_dumptime "FOLD" "1" "2048"
-EXEC change_puppi_dumptime "CAL" "1" "2048"
-SETUP pulsaron secs=1290 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
-PULSARON
-
-LOAD cima_control_puppi_430.conf
-SEEK J1630+3550
-EXEC change_puppi_parfile "/home/gpu/tzpar/1630+3550.par"
-ADJUSTPOWER
-EXEC change_puppi_dumptime "FOLD" "1" "2048"
-EXEC change_puppi_dumptime "CAL" "1" "2048"
-SETUP pulsaron secs=1290 loops=1 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
-PULSARON
-
 LOAD cima_control_puppi_1410.conf
 SEEK J1630+3550
 EXEC change_puppi_parfile "/home/gpu/tzpar/1630+3550.par"
 ADJUSTPOWER
 EXEC change_puppi_dumptime "FOLD" "10" "2048"
 EXEC change_puppi_dumptime "CAL" "10" "2048"
+SETUP pulsaron secs=1290 loops=1 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
+PULSARON
+
+LOAD cima_control_puppi_2030.conf
+SEEK J1630+3550
+EXEC change_puppi_parfile "/home/gpu/tzpar/1630+3550.par"
+ADJUSTPOWER
+EXEC change_puppi_dumptime "FOLD" "1" "2048"
+EXEC change_puppi_dumptime "CAL" "1" "2048"
 SETUP pulsaron secs=1290 loops=1 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
 PULSARON
 
@@ -213,15 +213,16 @@ PULSARON
 
 LOAD cima_control_puppi_1410.conf
 SEEK J0154+1833
-EXEC change_puppi_parfile "/home/gpu/tzpar/0154+1853.par"
+EXEC change_puppi_parfile "/home/gpu/tzpar/0154+1833.par"
 ADJUSTPOWER
 EXEC change_puppi_dumptime "FOLD" "1" "2048"
 EXEC change_puppi_dumptime "CAL" "1" "2048"
 SETUP pulsaron secs=1440 loops=1 caltype=winkcal calsecs=90 calmode=on winkcal=off winkcaltype=lcorcal adjpwr=never newfile=one
+PULSARON
 
-LOAD cima_control_puppi_430.conf
+LOAD cima_control_puppi_2030.conf
 SEEK J0154+1833
-EXEC change_puppi_parfile "/home/gpu/tzpar/0154+1853.par"
+EXEC change_puppi_parfile "/home/gpu/tzpar/0154+1833.par"
 ADJUSTPOWER
 EXEC change_puppi_dumptime "FOLD" "10" "2048"
 EXEC change_puppi_dumptime "CAL" "10" "2048"
