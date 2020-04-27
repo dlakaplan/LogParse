@@ -141,6 +141,12 @@ class CIMAPulsarObservationRequest(object):
     def parses(self):
         return self.executed and self.source_matches and not self.power_check
 
+    def __str__(self):
+        return "Observe {} at {} MHz for {}".format(self.source,
+                                                    self.frequency,
+                                                    self.duration,
+                                                    )
+
 
 class CIMAPulsarObservationExecution(object):
     def __init__(self):
@@ -325,10 +331,11 @@ class CIMAPulsarObservationLog(object):
                 note = "".join(note)
 
             print(
-                "{:>6} sec ({:>6} sec slewing) --> {} ({} sec requested) {}".format(
+                "{:>6} sec ({:>6} sec slewing) --> {} at {} ({} sec requested) {}".format(
                     int(time_gap.total_seconds()),
                     int(scan_current.execution.slewing.duration.total_seconds()),
                     scan_current,
+                    scan_current.start_time,
                     int(scan_current.requested_duration.total_seconds()),
                     note,
                 ),
@@ -449,6 +456,11 @@ class CIMAPulsarObservationLog(object):
                 self._command_file,
                 value,
             )
+        else:
+            logger.debug(
+                "Setting command file to %s.",
+                value,
+                )
         self._command_file = value
 
     @staticmethod
@@ -577,6 +589,12 @@ class CIMAPulsarObservationLog(object):
                             log.requested_commands[
                                 request.pulsaron_executive_line_number
                             ] = request
+                            logger.debug('Request: %s from line %d on line %d',
+                                         request,
+                                         int(exec_line_num),
+                                         line_num,
+                                         )
+
                         elif "EXEC ponoffcal" in cmd:
                             # also terminate a pulsar observing block
                             # for calibration
@@ -590,6 +608,11 @@ class CIMAPulsarObservationLog(object):
                             log.requested_commands[
                                 request.pulsaron_executive_line_number
                             ] = request
+                            logger.debug('Request: %s from line %d on line %d',
+                                         request,
+                                         int(exec_line_num),
+                                         line_num,
+                                         )
                         log_entry = parse_log_line(next(line_iterator).strip())
                         line_num += 1
                     else:
@@ -619,6 +642,13 @@ class CIMAPulsarObservationLog(object):
                     execution.request = log.requested_commands[exec_line_num]
                     execution.slewing = slewing
                     execution.logfile_start_line = line_num
+                    if not (slewing.source == execution.request.source):
+                        logger.warning('Tracking source %s, but observation request is for source %s (line %d)',
+                                       slewing.source,
+                                       execution.request.source,
+                                       line_num,
+                                       )
+                        execution
                 else:
                     logger.error(
                         "Failed to parse run_command_line for PULSARON: %s",
@@ -642,7 +672,7 @@ class CIMAPulsarObservationLog(object):
                     execution.logfile_start_line = line_num
                 else:
                     logger.error(
-                        "Failed to parse run_command_line for PULSARON: %s",
+                        "Failed to parse run_command_line for ponoffcal: %s",
                         log_entry.message,
                     )
 
@@ -655,15 +685,21 @@ class CIMAPulsarObservationLog(object):
             ):
                 execution.start_time = log_entry.datetime
                 execution.logfile_end_line = line_num
-                log.executed_commands[exec_line_num] = execution
-                if "calibration" in log_entry.message:
-                    execution.type = "cal"
-                logger.info(
-                    "Starting pulsar observation (%s) at %s line = %d",
-                    execution.type,
-                    log_entry.datetime,
-                    line_num,
-                )
+                if exec_line_num in log.executed_commands.keys():
+                    logger.warning('Command from line %d already exists from %s; not replacing',
+                                   exec_line_num,
+                                   log.executed_commands[exec_line_num].start_time,
+                                   )
+                else:
+                    log.executed_commands[exec_line_num] = execution
+                    if "calibration" in log_entry.message:
+                        execution.type = "cal"
+                    logger.info(
+                        "Starting pulsar observation (%s) at %s line = %d",
+                        execution.type,
+                        log_entry.datetime,
+                        line_num,
+                        )
             # end of pulsar observation
             elif (
                 log_entry.levelname == "END"
