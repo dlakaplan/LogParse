@@ -248,6 +248,7 @@ class CIMAPulsarObservationLog(object):
         self._filename = None
         self._modtime = None
         self.end_line = None
+        self.start_line = None
 
     def process_commands(self):
         for exec_line_num, request in self.requested_commands.items():
@@ -286,7 +287,10 @@ class CIMAPulsarObservationLog(object):
 
     def print_results(self, output=sys.stdout):
         print(
-            "### Report for: {}".format(self._filename,), file=output,
+            "##############################\n### Report for: {} starting at line {}".format(
+            self._filename,
+            self.start_line,
+            ), file=output,
         )
         if self.start_time is None:
             return
@@ -483,6 +487,9 @@ class CIMAPulsarObservationLog(object):
         # tolerance for noting a discrepancy between the requested and executed exposure time (in s)
         # if the |difference| < tolerance, don't do anything special
 
+        if start_line > 0:
+            logger.info("##############################")
+            logger.info("")
         logger.info("Looking at {} ...".format(filename))
         log = CIMAPulsarObservationLog(tolerance=tolerance)
         log._filename = filename
@@ -496,6 +503,7 @@ class CIMAPulsarObservationLog(object):
         f = open(filename)
         line_iterator = f.__iter__()
         line_num = 0
+        log.start_line = start_line
         if start_line > 0:
             logger.info(
                 "Starting at line %d", start_line,
