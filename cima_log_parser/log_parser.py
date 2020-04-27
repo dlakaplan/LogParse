@@ -253,10 +253,11 @@ class CIMAPulsarObservationLog(object):
         for exec_line_num, request in self.requested_commands.items():
             if exec_line_num not in self.executed_commands:
                 logger.warning(
-                    "Requested scan of %s for %d sec at %d MHz was not executed.",
+                    "Requested scan of %s for %d sec at %d MHz [line=%d] was not executed.",
                     request.source,
                     request.duration.total_seconds(),
                     request.frequency,
+                    request.setup_executive_line_number,
                 )
             else:
                 execution = self.executed_commands[exec_line_num]
