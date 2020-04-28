@@ -457,10 +457,12 @@ class CIMAPulsarObservationLog(object):
     def command_file(self, value):
         if self._command_file is not None:
             logger.warning(
-                "Existing observation command file overwritten! From %s to %s.",
+                "Existing observation command file overwritten! From %s to %s.  Deleting %d requested observations",
                 self._command_file,
                 value,
+                len(self.requested_commands.items()),
             )
+            self.requested_commands = {}
         else:
             logger.debug(
                 "Setting command file to %s.",
