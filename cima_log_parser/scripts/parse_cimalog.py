@@ -8,12 +8,21 @@ import re
 import logging
 import sys
 import json
-import urllib.request
+
 
 try:
     from cStringIO import StringIO  # Python 2
 except ImportError:
     from io import StringIO
+
+try:
+    import urllib.request  # Python 3
+
+    _python3 = True
+except:
+    import requests
+
+    _python3 = False
 
 from cima_log_parser import log_parser
 
@@ -158,13 +167,24 @@ def main():
         text = log_stream.getvalue()
         text = text.replace("ERROR", "*ERROR*").replace("WARNING", "_WARNING_")
         body = {"username": "CIMAbot", "text": text}
-        # post it to slack
-        req = urllib.request.Request(slackurl)
-        req.add_header("Content-Type", "application/json; charset=utf-8")
         jsondata = json.dumps(body)
         jsondataasbytes = jsondata.encode("utf-8")  # needs to be bytes
-        req.add_header("Content-Length", len(jsondataasbytes))
-        response = urllib.request.urlopen(req, jsondataasbytes)
+        # post it to slack
+        if _python3:
+            req = urllib.request.Request(slackurl)
+            req.add_header("Content-Type", "application/json; charset=utf-8")
+            req.add_header("Content-Length", len(jsondataasbytes))
+            response = urllib.request.urlopen(req, jsondataasbytes)
+        else:
+            response = requests.post(
+                slackurl, data=jsondata, headers={"Content-Type": "application/json"},
+            )
+
+        if response.status_code != 200:
+            logger.error(
+                "Request to slack returned an error %s, the response is:\n%s"
+                % (response.status_code, response.text)
+            )
 
 
 if __name__ == "__main__":
