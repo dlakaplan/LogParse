@@ -165,7 +165,11 @@ def main():
 
     if args.slack:
         text = log_stream.getvalue()
+        # do a bit of formatting for slack
         text = text.replace("ERROR", "*ERROR*").replace("WARNING", "_WARNING_")
+        text = text.replace("NANOGrav", "*NANOGrav*")
+        text = re.sub(r"(p\d{4})", r"*\1*", text)
+
         body = {"username": "CIMAbot", "text": text}
         jsondata = json.dumps(body)
         jsondataasbytes = jsondata.encode("utf-8")  # needs to be bytes
