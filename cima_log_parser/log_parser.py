@@ -286,31 +286,27 @@ class CIMAPulsarObservationLog(object):
         return filenames
 
     def print_results(self, output=sys.stdout):
-        output_str = []
-        output_str.append(
+        print(
             "##############################\n### Report for: {} starting at line {}".format(
                 self._filename, self.start_line,
-            )
+            ),
+            file=output,
         )
 
         if self.start_time is None:
-            if output is None:
-                return output_str
-            else:
-                print(
-                    output, file=output,
-                )
+            return None
 
-        output_str.append(
+        print(
             "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {} scans)".format(
                 self.project,
                 self.elapsed_time.total_seconds() / 3600,
                 self.observing_time.total_seconds() / 3600,
                 len(self.executed_commands),
-            )
+            ),
+            file=output,
         )
 
-        output_str.append("### {} - {}".format(self.start_time, self.end_time))
+        print("### {} - {}".format(self.start_time, self.end_time), file=output)
 
         if self.data_destination is None:
             logger.warning("Data destination is not set")
@@ -341,7 +337,7 @@ class CIMAPulsarObservationLog(object):
                 )
                 note = "".join(note)
 
-            output_str.append(
+            print(
                 "{:>6} sec ({:>6} sec slewing) --> {} at {} ({} sec requested) {}".format(
                     int(time_gap.total_seconds()),
                     int(scan_current.execution.slewing.duration.total_seconds()),
@@ -349,18 +345,16 @@ class CIMAPulsarObservationLog(object):
                     scan_current.start_time,
                     int(scan_current.requested_duration.total_seconds()),
                     note,
-                )
+                ),
+                file=output,
             )
 
-            output_str.append(
+            print(
                 "\tWriting to {}".format(
                     ", ".join(self.construct_filenames(scan_current)),
-                )
+                ),
+                file=output,
             )
-            if output is None:
-                return "\n".join(output_str)
-            else:
-                print("\n".join(output_str), file=output)
 
     @property
     def start_time(self):
