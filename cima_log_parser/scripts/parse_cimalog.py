@@ -10,6 +10,11 @@ import sys
 import json
 import urllib.request
 
+try:
+    from cStringIO import StringIO  # Python 2
+except ImportError:
+    from io import StringIO
+
 from cima_log_parser import log_parser
 
 
@@ -62,7 +67,10 @@ def main():
     #                    help='Send email with results')
 
     parser.add_argument(
-        "--slack", "-s", action="store_true", help="Send results to slack"
+        "--slack",
+        "-s",
+        action="store_true",
+        help="Send results to slack (requires ~/.slackurl)",
     )
 
     parser.add_argument(
@@ -94,6 +102,13 @@ def main():
         slackurl = None
         with open(os.path.join(os.getenv("HOME"), ".slackurl")) as slackfile:
             slackurl = slackfile.read().strip()
+        # make another logging handler to store things for slack
+        log_stream = StringIO()
+        logging.basicConfig(stream=log_stream, level=logging.INFO)
+        slackhandler = logging.StreamHandler(log_stream)
+        slackformatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+        slackhandler.setFormatter(slackformatter)
+        log_parser.logger.addHandler(slackhandler)
 
     if args.file is None:
         files = []
@@ -137,15 +152,19 @@ def main():
             log.print_results(output=args.out)
 
             if args.slack and slackurl is not None:
-                text = log.print_results(output=None)
-                body = {"username": "CIMAbot", "text": text}
-                # post it to slack
-                req = urllib.request.Request(slackurl)
-                req.add_header("Content-Type", "application/json; charset=utf-8")
-                jsondata = json.dumps(body)
-                jsondataasbytes = jsondata.encode("utf-8")  # needs to be bytes
-                req.add_header("Content-Length", len(jsondataasbytes))
-                response = urllib.request.urlopen(req, jsondataasbytes)
+                log.print_results(output=log_stream)
+
+    if args.slack:
+        text = log_stream.getvalue()
+        text = text.replace("ERROR", "*ERROR*").replace("WARNING", "_WARNING_")
+        body = {"username": "CIMAbot", "text": text}
+        # post it to slack
+        req = urllib.request.Request(slackurl)
+        req.add_header("Content-Type", "application/json; charset=utf-8")
+        jsondata = json.dumps(body)
+        jsondataasbytes = jsondata.encode("utf-8")  # needs to be bytes
+        req.add_header("Content-Length", len(jsondataasbytes))
+        response = urllib.request.urlopen(req, jsondataasbytes)
 
 
 if __name__ == "__main__":
