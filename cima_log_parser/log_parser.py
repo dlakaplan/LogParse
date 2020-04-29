@@ -814,6 +814,15 @@ class CIMAPulsarObservationLog(object):
                             line_num,
                         )
 
+            # various errors
+            elif log_entry.levelname == "ERROR":
+                #if log_entry.name == "send_puppi_obs_conf":
+                logger.warning('%s at %s line = %d',
+                               log_entry.message,
+                               log_entry.datetime,
+                               line_num)
+                    
+
             line_num += 1
         f.close()
         log.process_commands()
