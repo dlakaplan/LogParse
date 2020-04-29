@@ -7,6 +7,8 @@ import datetime
 import re
 import logging
 import sys
+import json
+import urllib.request
 
 from cima_log_parser import log_parser
 
@@ -58,6 +60,11 @@ def main():
     #                    type=str,
     #                    default=None,
     #                    help='Send email with results')
+
+    parser.add_argument(
+        "--slack", "-s", action="store_true", help="Send results to slack"
+    )
+
     parser.add_argument(
         "--out", "-o", default="stdout", type=str, help="Output destination"
     )
@@ -82,6 +89,11 @@ def main():
         formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
         newhandler.setFormatter(formatter)
         log_parser.logger.addHandler(newhandler)
+
+    if args.slack:
+        slackurl = None
+        with open(os.path.join(os.getenv("HOME"), ".slackurl")) as slackfile:
+            slackurl = slackfile.read().strip()
 
     if args.file is None:
         files = []
@@ -123,6 +135,17 @@ def main():
 
         for log in logs:
             log.print_results(output=args.out)
+
+            if args.slack and slackurl is not None:
+                text = log.print_results(output=None)
+                body = {"username": "CIMAbot", "text": text}
+                # post it to slack
+                req = urllib.request.Request(slackurl)
+                req.add_header("Content-Type", "application/json; charset=utf-8")
+                jsondata = json.dumps(body)
+                jsondataasbytes = jsondata.encode("utf-8")  # needs to be bytes
+                req.add_header("Content-Length", len(jsondataasbytes))
+                response = urllib.request.urlopen(req, jsondataasbytes)
 
 
 if __name__ == "__main__":

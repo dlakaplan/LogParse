@@ -8,6 +8,7 @@ import sys
 import os
 from collections import namedtuple
 
+
 # create logger with 'log_parser'
 logging.basicConfig(handlers=[logging.StreamHandler(sys.stdout)])
 logger = logging.getLogger("log_parser")
@@ -142,10 +143,9 @@ class CIMAPulsarObservationRequest(object):
         return self.executed and self.source_matches and not self.power_check
 
     def __str__(self):
-        return "Observe {} at {} MHz for {}".format(self.source,
-                                                    self.frequency,
-                                                    self.duration,
-                                                    )
+        return "Observe {} at {} MHz for {}".format(
+            self.source, self.frequency, self.duration,
+        )
 
 
 class CIMAPulsarObservationExecution(object):
@@ -286,26 +286,32 @@ class CIMAPulsarObservationLog(object):
         return filenames
 
     def print_results(self, output=sys.stdout):
-        print(
+        output_str = []
+        output_str.append(
             "##############################\n### Report for: {} starting at line {}".format(
-            self._filename,
-            self.start_line,
-            ), file=output,
+                self._filename, self.start_line,
+            )
         )
-        if self.start_time is None:
-            return
 
-        print(
+        if self.start_time is None:
+            if output is None:
+                return output_str
+            else:
+                print(
+                    output, file=output,
+                )
+
+        output_str.append(
             "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {} scans)".format(
                 self.project,
                 self.elapsed_time.total_seconds() / 3600,
                 self.observing_time.total_seconds() / 3600,
                 len(self.executed_commands),
-            ),
-            file=output,
+            )
         )
 
-        print("### {} - {}".format(self.start_time, self.end_time), file=output)
+        output_str.append("### {} - {}".format(self.start_time, self.end_time))
+
         if self.data_destination is None:
             logger.warning("Data destination is not set")
         self._scans.sort(key=lambda x: x.execution.start_time)
@@ -335,7 +341,7 @@ class CIMAPulsarObservationLog(object):
                 )
                 note = "".join(note)
 
-            print(
+            output_str.append(
                 "{:>6} sec ({:>6} sec slewing) --> {} at {} ({} sec requested) {}".format(
                     int(time_gap.total_seconds()),
                     int(scan_current.execution.slewing.duration.total_seconds()),
@@ -343,15 +349,18 @@ class CIMAPulsarObservationLog(object):
                     scan_current.start_time,
                     int(scan_current.requested_duration.total_seconds()),
                     note,
-                ),
-                file=output,
+                )
             )
-            print(
+
+            output_str.append(
                 "\tWriting to {}".format(
                     ", ".join(self.construct_filenames(scan_current)),
-                ),
-                file=output,
+                )
             )
+            if output is None:
+                return "\n".join(output_str)
+            else:
+                print("\n".join(output_str), file=output)
 
     @property
     def start_time(self):
@@ -465,9 +474,8 @@ class CIMAPulsarObservationLog(object):
             self.requested_commands = {}
         else:
             logger.debug(
-                "Setting command file to %s.",
-                value,
-                )
+                "Setting command file to %s.", value,
+            )
         self._command_file = value
 
     @staticmethod
@@ -600,11 +608,12 @@ class CIMAPulsarObservationLog(object):
                             log.requested_commands[
                                 request.pulsaron_executive_line_number
                             ] = request
-                            logger.debug('Request: %s from line %d on line %d',
-                                         request,
-                                         int(exec_line_num),
-                                         line_num,
-                                         )
+                            logger.debug(
+                                "Request: %s from line %d on line %d",
+                                request,
+                                int(exec_line_num),
+                                line_num,
+                            )
 
                         elif "EXEC ponoffcal" in cmd:
                             # also terminate a pulsar observing block
@@ -619,11 +628,12 @@ class CIMAPulsarObservationLog(object):
                             log.requested_commands[
                                 request.pulsaron_executive_line_number
                             ] = request
-                            logger.debug('Request: %s from line %d on line %d',
-                                         request,
-                                         int(exec_line_num),
-                                         line_num,
-                                         )
+                            logger.debug(
+                                "Request: %s from line %d on line %d",
+                                request,
+                                int(exec_line_num),
+                                line_num,
+                            )
                         log_entry = parse_log_line(next(line_iterator).strip())
                         line_num += 1
                     else:
@@ -654,11 +664,12 @@ class CIMAPulsarObservationLog(object):
                     execution.slewing = slewing
                     execution.logfile_start_line = line_num
                     if not (slewing.source == execution.request.source):
-                        logger.warning('Tracking source %s, but observation request is for source %s (line %d)',
-                                       slewing.source,
-                                       execution.request.source,
-                                       line_num,
-                                       )
+                        logger.warning(
+                            "Tracking source %s, but observation request is for source %s (line %d)",
+                            slewing.source,
+                            execution.request.source,
+                            line_num,
+                        )
                         execution
                 else:
                     logger.error(
@@ -697,10 +708,11 @@ class CIMAPulsarObservationLog(object):
                 execution.start_time = log_entry.datetime
                 execution.logfile_end_line = line_num
                 if exec_line_num in log.executed_commands.keys():
-                    logger.warning('Command from line %d already exists from %s; not replacing',
-                                   exec_line_num,
-                                   log.executed_commands[exec_line_num].start_time,
-                                   )
+                    logger.warning(
+                        "Command from line %d already exists from %s; not replacing",
+                        exec_line_num,
+                        log.executed_commands[exec_line_num].start_time,
+                    )
                 else:
                     log.executed_commands[exec_line_num] = execution
                     if "calibration" in log_entry.message:
@@ -710,7 +722,7 @@ class CIMAPulsarObservationLog(object):
                         execution.type,
                         log_entry.datetime,
                         line_num,
-                        )
+                    )
             # end of pulsar observation
             elif (
                 log_entry.levelname == "END"
@@ -816,12 +828,13 @@ class CIMAPulsarObservationLog(object):
 
             # various errors
             elif log_entry.levelname == "ERROR":
-                #if log_entry.name == "send_puppi_obs_conf":
-                logger.warning('%s at %s line = %d',
-                               log_entry.message,
-                               log_entry.datetime,
-                               line_num)
-                    
+                # if log_entry.name == "send_puppi_obs_conf":
+                logger.warning(
+                    "%s at %s line = %d",
+                    log_entry.message,
+                    log_entry.datetime,
+                    line_num,
+                )
 
             line_num += 1
         f.close()
