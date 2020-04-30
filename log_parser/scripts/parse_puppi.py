@@ -8,7 +8,7 @@ import re
 import logging
 import sys
 
-from cima_log_parser import log_parser
+from log_parser import log_parser
 
 
 def main():

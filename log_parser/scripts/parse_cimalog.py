@@ -24,7 +24,7 @@ except:
 
     _python3 = False
 
-from cima_log_parser import log_parser
+from log_parser import log_parser
 
 
 def main():
