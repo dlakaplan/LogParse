@@ -294,7 +294,7 @@ class CIMAPulsarObservationLog(object):
     def print_results(self, output=sys.stdout):
         print(
             "##############################\n### Report for: {} starting at line {}".format(
-                self._filename, self.start_line,
+                self.filename, self.start_line,
             ),
             file=output,
         )
@@ -450,6 +450,17 @@ class CIMAPulsarObservationLog(object):
         self._operator = value
 
     @property
+    def filename(self):
+        return self._filename
+
+    @filename.setter
+    def filename(self, value):
+        self._filename = value
+        self._modtime = datetime.datetime.fromtimestamp(
+            os.path.getmtime(self._filename)
+        )
+
+    @property
     def data_destination(self):
         return self._data_destination
 
@@ -507,9 +518,8 @@ class CIMAPulsarObservationLog(object):
             logger.info("")
         logger.info("Looking at {} ...".format(filename))
         log = CIMAPulsarObservationLog(tolerance=tolerance)
-        log._filename = filename
+        log.filename = filename
         parsing_stored_commands = False
-        log._modtime = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
         if datetime.datetime.now() - log._modtime < datetime.timedelta(seconds=60):
             logger.warning(
                 "File modification time was only %d sec ago...File may still be in progress.",
@@ -1007,6 +1017,70 @@ class GBTPulsarScan(object):
         )
 
 
+class GBTPulsarObservation(object):
+    def __init__(self):
+        self.science_scan = None
+        self.cal_scan = None
+
+    @property
+    def execution_type(self):
+        return self.science_scan.execution_type
+
+    @property
+    def frequency(self):
+        return self.cal_scan.frequency
+
+    @property
+    def source(self):
+        return self.cal_scan.source
+
+    @property
+    def logfile_start_line(self):
+        return self.cal_scan.logfile_start_line
+
+    @property
+    def logfile_end_line(self):
+        return self.science_scan.logfile_end_line
+
+    @property
+    def slewing(self):
+        return self.cal_scan.slewing
+
+    @property
+    def slew_duration(self):
+        return self.slewing.end_time - self.slewing.start_time
+
+    @property
+    def duration(self):
+        return self.end_time - self.start_time
+
+    @property
+    def cal_duration(self):
+        return self.cal_scan.end_time - self.cal_scan.start_time
+
+    @property
+    def start_time(self):
+        return self.science_scan.start_time
+
+    @property
+    def end_time(self):
+        return self.science_scan.end_time
+
+    @property
+    def scan_numbers(self):
+        return [self.cal_scan.scan_number, self.science_scan.scan_number]
+
+    def __str__(self):
+        return "Execute PSR {:<10} ({}) for {:>4}s + {:>3}s cal at {:>4}MHz at linenumber {:>5}".format(
+            self.source,
+            self.execution_type[:3],
+            int(self.duration.total_seconds()),
+            int(self.cal_duration.total_seconds()),
+            self.frequency,
+            self.logfile_end_line,
+        )
+
+
 class GBTPulsarObservationLog(object):
     def __init__(self, tolerance=100):
         self._date = None
@@ -1023,6 +1097,7 @@ class GBTPulsarObservationLog(object):
         self.end_line = None
         self.start_line = None
         self.log_session_number = 0
+        self.observing_session_number = None
         self._band = None
         self._frequency = None
         self.other_parameters = {}
@@ -1033,6 +1108,37 @@ class GBTPulsarObservationLog(object):
         self.tolerance = tolerance
         # not implemented yet
         self._requests = []
+
+    def process_commands(self):
+        # match up the scans into cal/science pairs
+        new_scans = []
+        for i in range(0, len(self._scans), 2):
+            cal_scan = self._scans[i]
+            logger.debug("Identified calibration scan %s", cal_scan)
+            if self._scans[i].duration.total_seconds() >= 100:
+                logger.warning(
+                    "Exposure time of %ds for scan %d does not make sense for a calibration scan",
+                    self._scans[i].duration.total_seconds(),
+                    i,
+                )
+
+            if len(self._scans) > i + 1:
+                science_scan = self._scans[i + 1]
+                logger.debug("Identified science scan %s", science_scan)
+                if self._scans[i + 1].duration.total_seconds() < 100:
+                    logger.warning(
+                        "Exposure time of %ds for scan %d does not make sense for a science scan",
+                        self._scans[i].duration.total_seconds(),
+                        i,
+                    )
+            else:
+                logger.warning("Cannot identify science scan to accompany scan %d", i)
+                science_scan = None
+            obs = GBTPulsarObservation()
+            obs.cal_scan = cal_scan
+            obs.science_scan = science_scan
+            new_scans.append(obs)
+        self._scans = new_scans
 
     @property
     def band(self):
@@ -1047,6 +1153,18 @@ class GBTPulsarObservationLog(object):
             )
         else:
             self._frequency = frequency_from_band[value]
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @filename.setter
+    def filename(self, value):
+        self._filename = value
+        self.observing_session_number = int(self._filename.split("_")[2])
+        self._modtime = datetime.datetime.fromtimestamp(
+            os.path.getmtime(self._filename)
+        )
 
     @property
     def frequency(self):
@@ -1183,8 +1301,7 @@ class GBTPulsarObservationLog(object):
 
         logger.info("Looking at {} ...".format(filename))
         log = GBTPulsarObservationLog(tolerance=tolerance)
-        log._filename = filename
-        log._modtime = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+        log.filename = filename
         if datetime.datetime.now() - log._modtime < datetime.timedelta(seconds=60):
             logger.warning(
                 "File modification time was only %d sec ago...File may still be in progress.",
@@ -1366,12 +1483,15 @@ class GBTPulsarObservationLog(object):
                     log.other_parameters[key.strip()] = value.strip()
             line_num += 1
 
+        f.close()
+        log.process_commands()
+
         return log
 
     def print_results(self, output=sys.stdout):
         print(
             "##############################\n### Report for: {} starting at line {}".format(
-                self._filename, self.start_line,
+                self.filename, self.start_line,
             ),
             file=output,
         )
