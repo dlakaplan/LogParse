@@ -255,6 +255,7 @@ class CIMAPulsarObservationLog(object):
         self._modtime = None
         self.end_line = None
         self.start_line = None
+        self.backend = None
 
     def process_commands(self):
         for exec_line_num, request in self.requested_commands.items():
@@ -312,6 +313,9 @@ class CIMAPulsarObservationLog(object):
                 len(self.sources),
             ),
             file=output,
+        )
+        print(
+            "### Backend: {}".format(self.backend), file=output,
         )
 
         print(
@@ -571,6 +575,16 @@ class CIMAPulsarObservationLog(object):
                     log.operator,
                     log_entry.datetime,
                 )
+            elif (
+                log_entry.name == "executive"
+                and log_entry.levelname == "INFO1"
+                and "Using CIMA version" in log_entry.message
+            ):
+                log.backend = log_entry.message.split()[4].replace("'", "")
+                logger.info(
+                    "Setting backend to %%s", log.backend, line_num,
+                )
+
             # where were the data written
             elif (
                 "LOG" in log_entry.levelname
@@ -1407,7 +1421,7 @@ class GBTPulsarObservationLog(object):
                         line_num,
                     )
 
-                match = re.match(r"^backend\s+=\s+'(\w+)?'", line.strip())
+                match = re.match(r"^backend\s+=\s+'(.*)?'", line.strip())
                 if match:
                     log.backend = match.groups()[0]
                     logger.info(
@@ -1574,6 +1588,10 @@ class GBTPulsarObservationLog(object):
                 len(self.sources),
             ),
             file=output,
+        )
+
+        print(
+            "### Backend: {}".format(self.backend), file=output,
         )
 
         print("### {} - {}".format(self.start_time, self.end_time), file=output)
