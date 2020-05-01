@@ -185,6 +185,8 @@ def main():
                 "Request to slack returned an error %s, the response is:\n%s"
                 % (response.status_code, response.text)
             )
+        else:
+            logger.info('Posted to slack')
 
 
 if __name__ == "__main__":
