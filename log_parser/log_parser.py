@@ -303,12 +303,13 @@ class CIMAPulsarObservationLog(object):
             return None
 
         print(
-            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {:.1f}m slewing; {} scans)".format(
+            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {:.1f}m slewing; {} scans {} sources)".format(
                 self.project,
                 self.elapsed_time.total_seconds() / 3600,
                 self.observing_time.total_seconds() / 3600,
                 self.slewing_time.total_seconds() / 60,
                 len(self.executed_commands),
+                len(self.sources),
             ),
             file=output,
         )
@@ -499,6 +500,10 @@ class CIMAPulsarObservationLog(object):
                 "Setting command file to %s.", value,
             )
         self._command_file = value
+
+    @property
+    def sources(self):
+        return set([scan.source for scan in self._scans])
 
     @staticmethod
     def parse_cima_logfile(filename, start_line=0, tolerance=100):
@@ -1321,6 +1326,10 @@ class GBTPulsarObservationLog(object):
             )
         self._date = value
 
+    @property
+    def sources(self):
+        return set([scan.source for scan in self._scans])
+
     def parse_log_line(self, line, time_format="%X"):
         match = re.match(r"^\[(?P<time>\d{2}:\d{2}:\d{2})\]\s+(?P<message>.*)", line)
         if match:
@@ -1556,12 +1565,13 @@ class GBTPulsarObservationLog(object):
             return None
 
         print(
-            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {:.1f}m slewing; {} scans)".format(
+            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {:.1f}m slewing; {} scans {} sources)".format(
                 self.project,
                 self.elapsed_time.total_seconds() / 3600,
                 self.observing_time.total_seconds() / 3600,
                 self.slewing_time.total_seconds() / 60,
                 len(self._scans),
+                len(self.sources),
             ),
             file=output,
         )
