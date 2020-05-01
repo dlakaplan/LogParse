@@ -313,7 +313,10 @@ class CIMAPulsarObservationLog(object):
             file=output,
         )
 
-        print("### {} - {}".format(self.start_time, self.end_time), file=output)
+        print(
+            "### {}: {} - {}".format(self.command_file, self.start_time, self.end_time),
+            file=output,
+        )
 
         if self.data_destination is None:
             logger.warning("Data destination is not set")
@@ -403,7 +406,10 @@ class CIMAPulsarObservationLog(object):
 
     @property
     def slewing_time(self):
-        return sum([scan.slewingduration for scan in self._scans], datetime.timedelta())
+        return sum(
+            [scan.execution.slewing.duration for scan in self._scans],
+            datetime.timedelta(),
+        )
 
     @property
     def project(self):
@@ -1122,6 +1128,7 @@ class GBTPulsarObservationLog(object):
         self.log_session_number = 0
         self.observing_session_number = None
         self._band = None
+        self.backend = None
         self._frequency = None
         self.other_parameters = {}
         # not implemented
@@ -1390,6 +1397,14 @@ class GBTPulsarObservationLog(object):
                         log.band,
                         line_num,
                     )
+
+                match = re.match(r"^backend\s+=\s+'(\w+)?'", line.strip())
+                if match:
+                    log.backend = match.groups()[0]
+                    logger.info(
+                        "Setting backend to %%s", log.backend, line_num,
+                    )
+
             else:
                 # if we get here, then the pre-amble is finished
                 # keep track of the last line as well, since that helps interpret some things
