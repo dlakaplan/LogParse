@@ -185,12 +185,12 @@ def main():
             )
 
         if response.status_code != 200:
-            logger.error(
+            log_parser.logger.error(
                 "Request to slack returned an error %s, the response is:\n%s"
                 % (response.status_code, response.text)
             )
         else:
-            logger.info('Posted to slack')
+            log_parser.logger.info('Posted to slack')
 
 
 if __name__ == "__main__":
