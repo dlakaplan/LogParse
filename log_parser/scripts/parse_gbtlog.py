@@ -151,22 +151,13 @@ def main():
     good_files = args.file
 
     for file in good_files:
-        start_line = 0
-        logs = []
-        while True:
-            log = log_parser.GBTPulsarObservationLog.parse_gbt_logfile(
-                file, start_line=start_line, tolerance=args.tolerance,
+        log = log_parser.GBTPulsarObservationLog.parse_gbt_logfile(
+            file, tolerance=args.tolerance,
             )
-            if log.start_time is None:
-                break
-            start_line = log.end_line + 1
-            logs.append(log)
+        log.print_results(output=args.out)
 
-        for log in logs:
-            log.print_results(output=args.out)
-
-            if args.slack and slackurl is not None:
-                log.print_results(output=log_stream)
+        if args.slack and slackurl is not None:
+            log.print_results(output=log_stream)
 
     if args.slack:
         text = log_stream.getvalue()
