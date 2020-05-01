@@ -1021,6 +1021,7 @@ class GBTPulsarObservation(object):
     def __init__(self):
         self.science_scan = None
         self.cal_scan = None
+        self.request = None
 
     @property
     def execution_type(self):
@@ -1063,6 +1064,13 @@ class GBTPulsarObservation(object):
     @property
     def cal_duration(self):
         return self.cal_scan.end_time - self.cal_scan.start_time
+
+    @property
+    def requested_duration(self):
+        if self.request is not None:
+            return self.request.end_time - self.request.start_time
+        else:
+            return datetime.timedelta(secs=0)
 
     @property
     def start_time(self):
@@ -1146,12 +1154,27 @@ class GBTPulsarObservationLog(object):
                         self._scans[i].duration.total_seconds(),
                         i,
                     )
+
             else:
                 logger.warning("Cannot identify science scan to accompany scan %d", i)
                 science_scan = None
             obs = GBTPulsarObservation()
             obs.cal_scan = cal_scan
             obs.science_scan = science_scan
+            for request in self._requests:
+                if science_scan is not None and science_scan.source == request.source:
+                    logger.debug(
+                        "Identified request for science scan %s: %s",
+                        science_scan,
+                        request,
+                    )
+                    obs.request = request
+                elif science_scan is None and cal_scan.source == requests.source:
+                    logger.debug(
+                        "Identified request for cal scan %s: %s", cal_scan, request,
+                    )
+                    obs.request = request
+
             new_scans.append(obs)
         self._scans = new_scans
 
@@ -1563,8 +1586,7 @@ class GBTPulsarObservationLog(object):
                     int(scan_current.slewing.duration.total_seconds()),
                     scan_current,
                     scan_current.start_time,
-                    0,
-                    # int(scan_current.requested_duration.total_seconds()),
+                    int(scan_current.requested_duration.total_seconds()),
                     note,
                 ),
                 file=output,
