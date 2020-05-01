@@ -156,7 +156,7 @@ def main():
         # do a bit of formatting for slack
         text = text.replace("ERROR", "*ERROR*").replace("WARNING", "_WARNING_")
         text = text.replace("NANOGrav", "*NANOGrav*")
-        text = re.sub(r"\s+(\wGBT\d\d\w_\d+)", r"*\1*", text)
+        text = re.sub(r"(\s+)(\wGBT\d\d\w_\d+)", r"\1*\2*", text)
 
         body = {"username": "GBTbot", "text": text}
         jsondata = json.dumps(body)
