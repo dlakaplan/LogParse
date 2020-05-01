@@ -1526,6 +1526,9 @@ class GBTPulsarObservationLog(object):
 
         return log
 
+    def construct_filenames(self, scan):
+        return map(str, scan.scan_numbers)
+
     def print_results(self, output=sys.stdout):
         print(
             "##############################\n### Report for: {} starting at line {}".format(
@@ -1592,14 +1595,12 @@ class GBTPulsarObservationLog(object):
                 file=output,
             )
 
-            """
             print(
                 "\tWriting to {}".format(
                     ", ".join(self.construct_filenames(scan_current)),
                 ),
                 file=output,
-                )
-            """
+            )
 
 
 if __name__ == "__main__":
