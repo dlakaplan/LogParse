@@ -1024,7 +1024,10 @@ class GBTPulsarObservation(object):
 
     @property
     def execution_type(self):
-        return self.science_scan.execution_type
+        if self.science_scan is not None:
+            return self.science_scan.execution_type
+        else:
+            return self.cal_scan.execution_type
 
     @property
     def frequency(self):
@@ -1040,7 +1043,10 @@ class GBTPulsarObservation(object):
 
     @property
     def logfile_end_line(self):
-        return self.science_scan.logfile_end_line
+        if self.science_scan is not None:
+            return self.science_scan.logfile_end_line
+        else:
+            return self.cal_scan.logfile_end_line
 
     @property
     def slewing(self):
@@ -1060,15 +1066,24 @@ class GBTPulsarObservation(object):
 
     @property
     def start_time(self):
-        return self.science_scan.start_time
+        if self.science_scan is not None:
+            return self.science_scan.start_time
+        else:
+            return self.cal_scan.start_time
 
     @property
     def end_time(self):
-        return self.science_scan.end_time
+        if self.science_scan is not None:
+            return self.science_scan.end_time
+        else:
+            return self.cal_scan.end_time
 
     @property
     def scan_numbers(self):
-        return [self.cal_scan.scan_number, self.science_scan.scan_number]
+        if self.science_scan is not None:
+            return [self.cal_scan.scan_number, self.science_scan.scan_number]
+        else:
+            return [self.cal_scan.scan_number]
 
     def __str__(self):
         return "Execute PSR {:<10} ({}) for {:>4}s + {:>3}s cal at {:>4}MHz at linenumber {:>5}".format(
