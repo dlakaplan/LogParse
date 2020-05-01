@@ -28,8 +28,6 @@ from log_parser import log_parser
 
 
 def main():
-    #programs = ["p2945", "p2780"]
-
     parser = argparse.ArgumentParser(
         description="Parse an GBT log file",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -42,7 +40,6 @@ def main():
         default=None,
         help="Name(s) of GBT log file(s)",
     )
-    """
     parser.add_argument(
         "--directory",
         "-d",
@@ -51,21 +48,12 @@ def main():
         help="Directory to search for log files",
     )
     parser.add_argument(
-        "--programs",
-        "-p",
-        type=str,
-        nargs="+",
-        default=programs,
-        help="Observing programs to look for",
-    )
-    parser.add_argument(
         "--days",
         "-t",
         type=int,
         default=1,
         help="Days in the past to look for log files (<=0: find all)",
     )
-    """
     parser.add_argument(
         "--tolerance",
         type=int,
@@ -121,39 +109,43 @@ def main():
         slackhandler.setFormatter(slackformatter)
         log_parser.logger.addHandler(slackhandler)
 
-    """
     if args.file is None:
-        files = []
-        for program in args.programs:
-            files += sorted(
-                glob.glob(os.path.join(args.directory, "{}.cimalog_*".format(program)))
-            )
+        today = datetime.datetime.today()
+        good_files = []
         if args.days > 0:
-            today = datetime.date.today()
-            good_files = []
-            for file in files:
-                match = re.match(r".*?.cimalog_(?P<datetime>\d{4}\d{2}\d{2})", file,)
-                if match:
-                    _datetime = datetime.datetime.strptime(
-                        match.group("datetime"), "%Y%m%d"
-                    )
-                    if today - _datetime.date() < datetime.timedelta(days=args.days):
-                        good_files.append(file)
+            log_parser.logger.debug(
+                "Looking for files written < %d days ago in %s",
+                args.days,
+                args.directory,
+            )
         else:
-            good_files = files
+            log_parser.logger.debug(
+                "Looking for files in %s", args.directory,
+            )
+
+        for dir_name, subdir_list, file_list in os.walk(args.directory):
+            for file in file_list:
+                if re.match(r"\wGBT\d\d[AB]_\d+_\d+_log.txt", file):
+                    filename = os.path.join(dir_name, file)
+                    modtime = datetime.datetime.fromtimestamp(
+                        os.path.getmtime(filename)
+                    )
+                    if args.days > 0:
+                        if today - modtime < datetime.timedelta(days=args.days):
+                            good_files.append(filename)
+                    else:
+                        good_files.append(filename)
 
         if len(good_files) == 0:
             log_parser.logger.error("No files found")
 
     else:
         good_files = args.file
-        """
-    good_files = args.file
 
     for file in good_files:
         log = log_parser.GBTPulsarObservationLog.parse_gbt_logfile(
             file, tolerance=args.tolerance,
-            )
+        )
         log.print_results(output=args.out)
 
         if args.slack and slackurl is not None:
@@ -164,7 +156,7 @@ def main():
         # do a bit of formatting for slack
         text = text.replace("ERROR", "*ERROR*").replace("WARNING", "_WARNING_")
         text = text.replace("NANOGrav", "*NANOGrav*")
-        text = re.sub(r"(p\d{4})", r"*\1*", text)
+        text = re.sub(r"\s+(\wGBT\d\d\w_\d+)", r"*\1*", text)
 
         body = {"username": "GBTbot", "text": text}
         jsondata = json.dumps(body)
@@ -186,7 +178,7 @@ def main():
                 % (response.status_code, response.text)
             )
         else:
-            logger.info('Posted to slack')
+            logger.info("Posted to slack")
 
 
 if __name__ == "__main__":

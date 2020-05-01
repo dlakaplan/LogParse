@@ -121,12 +121,12 @@ def main():
 
     if args.file is None:
         files = []
+        today = datetime.date.today()
         for program in args.programs:
             files += sorted(
                 glob.glob(os.path.join(args.directory, "{}.cimalog_*".format(program)))
             )
         if args.days > 0:
-            today = datetime.date.today()
             good_files = []
             for file in files:
                 match = re.match(r".*?.cimalog_(?P<datetime>\d{4}\d{2}\d{2})", file,)
