@@ -950,7 +950,7 @@ class GBTSlewingExecution(object):
         self.end_time = None
         self.logfile_start_line = None
         self.logfile_end_line = None
-        # to implement
+        # to implement?
         self.status = None
         self.frequency = None
 
@@ -985,9 +985,9 @@ class GBTPulsarScan(object):
         self.logfile_end_line = None
         self.scan_number = None
         self.source = None
+        self.frequency = None
         # not implemented
         self.execution_type = "std"
-        self.frequency = None
 
     @property
     def slew_duration(self):
@@ -1017,13 +1017,7 @@ class GBTPulsarObservationLog(object):
         self._mode = None
         self._operator = None
         self._observer = None
-        # not implemented
-        self._data_destination = None
-        self._requests = []
         self._scans = []
-        # self.tolerance = datetime.timedelta(seconds=tolerance)
-        # not used
-        self.tolerance = tolerance
         self._filename = None
         self._modtime = None
         self.end_line = None
@@ -1032,6 +1026,13 @@ class GBTPulsarObservationLog(object):
         self._band = None
         self._frequency = None
         self.other_parameters = {}
+        # not implemented
+        self._data_destination = None
+        # self.tolerance = datetime.timedelta(seconds=tolerance)
+        # not used
+        self.tolerance = tolerance
+        # not implemented yet
+        self._requests = []
 
     @property
     def band(self):
@@ -1119,6 +1120,44 @@ class GBTPulsarObservationLog(object):
             )
         self._operator = value
 
+    @property
+    def observer(self):
+        return self._observer
+
+    @observer.setter
+    def observer(self, value):
+        if self._observer is not None:
+            logger.warning(
+                "Existing observer overwritten! From %s to %s.", self._observer, value,
+            )
+        self._observer = value
+
+    @property
+    def sb_name(self):
+        return self._sb_name
+
+    @sb_name.setter
+    def sb_name(self, value):
+        if self._sb_name is not None:
+            logger.warning(
+                "Existing SB name overwritten! From %s to %s.", self._sb_name, value,
+            )
+        self._sb_name = value
+
+    @property
+    def date(self):
+        return self._date
+
+    @date.setter
+    def date(self, value):
+        if self._date is not None:
+            logger.warning(
+                "Existing observation date overwritten! From %s to %s.",
+                self._date,
+                value,
+            )
+        self._date = value
+
     def parse_log_line(self, line, time_format="%X"):
         match = re.match(r"^\[(?P<time>\d{2}:\d{2}:\d{2})\]\s+(?P<message>.*)", line)
         if match:
@@ -1167,6 +1206,13 @@ class GBTPulsarObservationLog(object):
         last_message = None
         log_entry = None
         for line in line_iterator:
+            # the stuff above here appears to be pre-amble
+            # containing the astrid code etc
+            # actual log starts with
+            """
+            #######################################################
+             LOG SESSION NUMBER 1 
+             """
             if log.log_session_number == 0:
                 match = re.match(r"\s*LOG SESSION NUMBER (\d+)", line)
                 if match:
@@ -1177,6 +1223,9 @@ class GBTPulsarObservationLog(object):
                         log.log_session_number,
                         line_num,
                     )
+
+                # the band gets set early on in the ASTRID setup
+                # it is only used in setting the band for the requests
                 match = re.match(r"^band\s+=\s+'(\w+)?'", line.strip())
                 if match:
                     log.band = match.groups()[0]
@@ -1187,7 +1236,8 @@ class GBTPulsarObservationLog(object):
                         line_num,
                     )
             else:
-
+                # if we get here, then the pre-amble is finished
+                # keep track of the last line as well, since that helps interpret some things
                 if log_entry is not None:
                     last_message = log_entry.message
                 log_entry = log.parse_log_line(line)
@@ -1196,30 +1246,40 @@ class GBTPulsarObservationLog(object):
                         "observer" in log_entry.message
                         and last_message == "******** Begin Scheduling Block"
                     ):
+                        """
+                        A line like:
+                        [23:02:13] ******** observer = Zaven Arzoumanian, SB name = nanograv_timing_vegas, project ID = AGBT18B_226, date = 06 Sep 2019
+
+                        but only after:
+                        [23:02:13] ******** Begin Scheduling Block
+                        """
                         entries = log_entry.message.split(",")
                         for entry in entries:
                             key, value = entry.split("=")
                             if "observer" in key.strip():
-                                log._observer = value.strip()
+                                log.observer = value.strip()
                             elif "SB name" in key.strip():
-                                log._sb_name = value.strip()
+                                log.sb_name = value.strip()
                             elif "project ID" in key.strip():
-                                log._project = value.strip()
+                                log.project = value.strip()
                             elif "date" in key.strip():
-                                log._date = datetime.datetime.strptime(
+                                log.date = datetime.datetime.strptime(
                                     value.strip(), "%d %b %Y"
                                 )
                         logger.info(
                             "Observer: %s; SB name: %s; Project: %s",
-                            log._observer,
-                            log._sb_name,
-                            log._project,
+                            log.observer,
+                            log.sb_name,
+                            log.project,
                         )
                         log.start_time = datetime.datetime.combine(
-                            log._date, log_entry.datetime.time()
+                            log.date, log_entry.datetime.time()
                         )
                     elif log_entry.message.startswith("Src"):
                         # a planned observation
+                        """
+                        [23:02:13]   Src 'J1713+0747' start:2019-09-06 23:02:13.11, stop:2019-09-06 23:21:28.74
+                        """
                         match = re.match(
                             r"^Src\s+'(?P<source>.*?)'\s+start:(?P<starttime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.\d{2}, stop:(?P<endtime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.\d{2}",
                             log_entry.message,
