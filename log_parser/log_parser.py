@@ -303,10 +303,11 @@ class CIMAPulsarObservationLog(object):
             return None
 
         print(
-            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {} scans)".format(
+            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {:.1f}m slewing; {} scans)".format(
                 self.project,
                 self.elapsed_time.total_seconds() / 3600,
                 self.observing_time.total_seconds() / 3600,
+                self.slewing_time.total_seconds() / 60,
                 len(self.executed_commands),
             ),
             file=output,
@@ -399,6 +400,10 @@ class CIMAPulsarObservationLog(object):
         return sum(
             [scan.executed_duration for scan in self._scans], datetime.timedelta()
         )
+
+    @property
+    def slewing_time(self):
+        return sum([scan.slewingduration for scan in self._scans], datetime.timedelta())
 
     @property
     def project(self):
@@ -957,7 +962,7 @@ class GBTSlewingExecution(object):
 class GBTPulsarObservationRequest(object):
     def __init__(self):
         self.source = None
-        self.frequency = 0
+        self.frequency = None
         self.start_time = None
         self.end_time = None
 
@@ -1024,6 +1029,27 @@ class GBTPulsarObservationLog(object):
         self.end_line = None
         self.start_line = None
         self.log_session_number = 0
+        self._band = None
+        self._frequency = None
+        self.other_parameters = {}
+
+    @property
+    def band(self):
+        return self._band
+
+    @band.setter
+    def band(self, value):
+        self._band = value
+        if not value in frequency_from_band.keys():
+            logger.warning(
+                "Frequency for band %s not found", value,
+            )
+        else:
+            self._frequency = frequency_from_band[value]
+
+    @property
+    def frequency(self):
+        return self._frequency
 
     @property
     def start_time(self):
@@ -1033,9 +1059,8 @@ class GBTPulsarObservationLog(object):
     def start_time(self, value):
         if self._start_time is not None:
             logger.warning(
-                "Existing observation log start time is present (%s); not overwritten! From %s to",
+                "Existing observation log start time is present (%s); not overwritten!",
                 self._start_time,
-                value,
             )
         else:
             self._start_time = value
@@ -1061,6 +1086,10 @@ class GBTPulsarObservationLog(object):
     @property
     def observing_time(self):
         return sum([scan.duration for scan in self._scans], datetime.timedelta())
+
+    @property
+    def slewing_time(self):
+        return sum([scan.slew_duration for scan in self._scans], datetime.timedelta())
 
     @property
     def project(self):
@@ -1134,10 +1163,9 @@ class GBTPulsarObservationLog(object):
             next(line_iterator)
             line_num += 1
         slewing = None
-
-        other_parameters = {}
         source = None
-        frequency = None
+        last_message = None
+        log_entry = None
         for line in line_iterator:
             if log.log_session_number == 0:
                 match = re.match(r"\s*LOG SESSION NUMBER (\d+)", line)
@@ -1151,18 +1179,23 @@ class GBTPulsarObservationLog(object):
                     )
                 match = re.match(r"^band\s+=\s+'(\w+)?'", line.strip())
                 if match:
-                    frequency = frequency_from_band[match.groups()[0]]
+                    log.band = match.groups()[0]
                     logger.info(
-                        "Setting frequency to %f (%s band) line %s",
-                        frequency,
-                        match.groups()[0],
+                        "Setting frequency to %.1f (%s band) line %s",
+                        log.frequency,
+                        log.band,
                         line_num,
                     )
             else:
 
+                if log_entry is not None:
+                    last_message = log_entry.message
                 log_entry = log.parse_log_line(line)
                 if log_entry is not None:
-                    if "observer" in log_entry.message:
+                    if (
+                        "observer" in log_entry.message
+                        and last_message == "******** Begin Scheduling Block"
+                    ):
                         entries = log_entry.message.split(",")
                         for entry in entries:
                             key, value = entry.split("=")
@@ -1185,7 +1218,6 @@ class GBTPulsarObservationLog(object):
                         log.start_time = datetime.datetime.combine(
                             log._date, log_entry.datetime.time()
                         )
-                        print(log.start_time)
                     elif log_entry.message.startswith("Src"):
                         # a planned observation
                         match = re.match(
@@ -1202,6 +1234,7 @@ class GBTPulsarObservationLog(object):
                             request.end_time = datetime.datetime.strptime(
                                 match.group("endtime"), "%Y-%m-%d %H:%M:%S"
                             )
+                            request.frequency = log.frequency
                             log._requests.append(request)
                             logger.info(
                                 "Request to %s line %d", request, line_num,
@@ -1229,7 +1262,7 @@ class GBTPulsarObservationLog(object):
                             scan.slewing = slewing
                             scan.source = source
                             scan.logfile_start_line = line_num
-                            scan.frequency = float(other_parameters["restfreq"])
+                            scan.frequency = float(log.other_parameters["restfreq"])
                             logger.info(
                                 "Starting observation of source %s at %s",
                                 source,
@@ -1270,7 +1303,7 @@ class GBTPulsarObservationLog(object):
 
                 elif "=" in line:
                     key, value = line.split("=")
-                    other_parameters[key.strip()] = value.strip()
+                    log.other_parameters[key.strip()] = value.strip()
             line_num += 1
 
         return log
@@ -1287,10 +1320,11 @@ class GBTPulsarObservationLog(object):
             return None
 
         print(
-            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {} scans)".format(
+            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {:.1f}m slewing; {} scans)".format(
                 self.project,
                 self.elapsed_time.total_seconds() / 3600,
                 self.observing_time.total_seconds() / 3600,
+                self.slewing_time.total_seconds() / 60,
                 len(self._scans),
             ),
             file=output,
