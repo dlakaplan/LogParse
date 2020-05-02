@@ -1425,7 +1425,7 @@ class GBTPulsarObservationLog(object):
                 if match:
                     log.backend = match.groups()[0]
                     logger.info(
-                        "Setting backend to %%s", log.backend, line_num,
+                        "Setting backend to %s line %s", log.backend, line_num,
                     )
 
             else:
