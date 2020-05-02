@@ -16,10 +16,16 @@ logger.setLevel(logging.INFO)
 
 CIMALogEntry = namedtuple("CIMALogEntry", ["datetime", "levelname", "name", "message"])
 
+GBTLogEntry = namedtuple("LogEntry", ["datetime", "message"])
 
-def parse_log_line(line, datetime_format="%Y-%b-%d %X"):
+# mapping between band name and frequency
+# adjust as needed
+frequency_from_band = {"L": 1500, "S": 2300, "820": 820}
+
+
+def parse_cima_log_line(line, datetime_format="%Y-%b-%d %X"):
     """
-    CIMALogEntry = parse_log_line(line)
+    CIMALogEntry = parse_cima_log_line(line)
 
     Arguments:
         line: str - CIMA log line
@@ -50,9 +56,9 @@ def parse_log_line(line, datetime_format="%Y-%b-%d %X"):
         return None
 
 
-def parse_store_command_file_line(log_message):
+def parse_cima_store_command_file_line(log_message):
     """
-    command_parts = parse_store_command_file_line(<line>)
+    command_parts = parse_cima_store_command_file_line(<line>)
 
     Arguments:
         log_message: str - CIMA log message
@@ -249,6 +255,7 @@ class CIMAPulsarObservationLog(object):
         self._modtime = None
         self.end_line = None
         self.start_line = None
+        self.backend = None
 
     def process_commands(self):
         for exec_line_num, request in self.requested_commands.items():
@@ -288,7 +295,7 @@ class CIMAPulsarObservationLog(object):
     def print_results(self, output=sys.stdout):
         print(
             "##############################\n### Report for: {} starting at line {}".format(
-                self._filename, self.start_line,
+                self.filename, self.start_line,
             ),
             file=output,
         )
@@ -297,16 +304,24 @@ class CIMAPulsarObservationLog(object):
             return None
 
         print(
-            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {} scans)".format(
+            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {:.1f}m slewing; {} scans {} sources)".format(
                 self.project,
                 self.elapsed_time.total_seconds() / 3600,
                 self.observing_time.total_seconds() / 3600,
+                self.slewing_time.total_seconds() / 60,
                 len(self.executed_commands),
+                len(self.sources),
             ),
             file=output,
         )
+        print(
+            "### Backend: {}".format(self.backend), file=output,
+        )
 
-        print("### {} - {}".format(self.start_time, self.end_time), file=output)
+        print(
+            "### {}: {} - {}".format(self.command_file, self.start_time, self.end_time),
+            file=output,
+        )
 
         if self.data_destination is None:
             logger.warning("Data destination is not set")
@@ -395,6 +410,13 @@ class CIMAPulsarObservationLog(object):
         )
 
     @property
+    def slewing_time(self):
+        return sum(
+            [scan.execution.slewing.duration for scan in self._scans],
+            datetime.timedelta(),
+        )
+
+    @property
     def project(self):
         return self._project
 
@@ -439,6 +461,17 @@ class CIMAPulsarObservationLog(object):
         self._operator = value
 
     @property
+    def filename(self):
+        return self._filename
+
+    @filename.setter
+    def filename(self, value):
+        self._filename = value
+        self._modtime = datetime.datetime.fromtimestamp(
+            os.path.getmtime(self._filename)
+        )
+
+    @property
     def data_destination(self):
         return self._data_destination
 
@@ -472,6 +505,10 @@ class CIMAPulsarObservationLog(object):
             )
         self._command_file = value
 
+    @property
+    def sources(self):
+        return set([scan.source for scan in self._scans])
+
     @staticmethod
     def parse_cima_logfile(filename, start_line=0, tolerance=100):
         """
@@ -496,9 +533,8 @@ class CIMAPulsarObservationLog(object):
             logger.info("")
         logger.info("Looking at {} ...".format(filename))
         log = CIMAPulsarObservationLog(tolerance=tolerance)
-        log._filename = filename
+        log.filename = filename
         parsing_stored_commands = False
-        log._modtime = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
         if datetime.datetime.now() - log._modtime < datetime.timedelta(seconds=60):
             logger.warning(
                 "File modification time was only %d sec ago...File may still be in progress.",
@@ -517,7 +553,7 @@ class CIMAPulsarObservationLog(object):
             line_num += 1
         slewing = None
         for line in line_iterator:
-            log_entry = parse_log_line(line.strip())
+            log_entry = parse_cima_log_line(line.strip())
             if log_entry is None:
                 continue
             # start of observation block
@@ -539,6 +575,16 @@ class CIMAPulsarObservationLog(object):
                     log.operator,
                     log_entry.datetime,
                 )
+            elif (
+                log_entry.name == "executive"
+                and log_entry.levelname == "INFO1"
+                and "Using CIMA version" in log_entry.message
+            ):
+                log.backend = log_entry.message.split()[4].replace("'", "")
+                logger.info(
+                    "Setting backend to %%s", log.backend, line_num,
+                )
+
             # where were the data written
             elif (
                 "LOG" in log_entry.levelname
@@ -563,7 +609,9 @@ class CIMAPulsarObservationLog(object):
                 parsing_stored_commands = True
                 # continue to parse lines to capture all command line inputs
                 while parsing_stored_commands:
-                    command_parts = parse_store_command_file_line(log_entry.message)
+                    command_parts = parse_cima_store_command_file_line(
+                        log_entry.message
+                    )
                     if command_parts is not None:
                         cmd_line_num, exec_line_num, cmd = command_parts
                         if "LOAD" in cmd:
@@ -628,7 +676,7 @@ class CIMAPulsarObservationLog(object):
                                 int(exec_line_num),
                                 line_num,
                             )
-                        log_entry = parse_log_line(next(line_iterator).strip())
+                        log_entry = parse_cima_log_line(next(line_iterator).strip())
                         line_num += 1
                     else:
                         # stop parsing stored commands
@@ -925,6 +973,674 @@ class CIMAPulsarObservationPlans(object):
                     request.frequency,
                     request.setup_command_line_number,
                     note,
+                ),
+                file=output,
+            )
+
+
+class GBTSlewingExecution(object):
+    def __init__(self):
+        self.source = None
+        self.start_time = None
+        self.end_time = None
+        self.logfile_start_line = None
+        self.logfile_end_line = None
+        # to implement?
+        self.status = None
+        self.frequency = None
+
+    @property
+    def duration(self):
+        return self.end_time - self.start_time
+
+
+class GBTPulsarObservationRequest(object):
+    def __init__(self):
+        self.source = None
+        self.frequency = None
+        self.start_time = None
+        self.end_time = None
+
+    @property
+    def duration(self):
+        return self.end_time - self.start_time
+
+    def __str__(self):
+        return "Observe {} at {} MHz for {}".format(
+            self.source, self.frequency, self.duration,
+        )
+
+
+class GBTPulsarScan(object):
+    def __init__(self):
+        self.slewing = None
+        self.start_time = None
+        self.end_time = None
+        self.logfile_start_line = None
+        self.logfile_end_line = None
+        self.scan_number = None
+        self.source = None
+        self.frequency = None
+        # not implemented
+        self.execution_type = "std"
+
+    @property
+    def slew_duration(self):
+        return self.slewing.end_time - self.slewing.start_time
+
+    @property
+    def duration(self):
+        return self.end_time - self.start_time
+
+    def __str__(self):
+        return "Execute PSR {:<10} ({}) for {:>4}s at {:>4}MHz at linenumber {:>5}".format(
+            self.source,
+            self.execution_type[:3],
+            int(self.duration.total_seconds()),
+            self.frequency,
+            self.logfile_end_line,
+        )
+
+
+class GBTPulsarObservation(object):
+    def __init__(self):
+        self.science_scan = None
+        self.cal_scan = None
+        self.request = None
+
+    @property
+    def execution_type(self):
+        if self.science_scan is not None:
+            return self.science_scan.execution_type
+        else:
+            return self.cal_scan.execution_type
+
+    @property
+    def frequency(self):
+        return self.cal_scan.frequency
+
+    @property
+    def source(self):
+        return self.cal_scan.source
+
+    @property
+    def logfile_start_line(self):
+        return self.cal_scan.logfile_start_line
+
+    @property
+    def logfile_end_line(self):
+        if self.science_scan is not None:
+            return self.science_scan.logfile_end_line
+        else:
+            return self.cal_scan.logfile_end_line
+
+    @property
+    def slewing(self):
+        return self.cal_scan.slewing
+
+    @property
+    def slew_duration(self):
+        return self.slewing.end_time - self.slewing.start_time
+
+    @property
+    def duration(self):
+        return self.end_time - self.start_time
+
+    @property
+    def cal_duration(self):
+        return self.cal_scan.end_time - self.cal_scan.start_time
+
+    @property
+    def requested_duration(self):
+        if self.request is not None:
+            return self.request.end_time - self.request.start_time
+        else:
+            return datetime.timedelta(secs=0)
+
+    @property
+    def start_time(self):
+        if self.science_scan is not None:
+            return self.science_scan.start_time
+        else:
+            return self.cal_scan.start_time
+
+    @property
+    def end_time(self):
+        if self.science_scan is not None:
+            return self.science_scan.end_time
+        else:
+            return self.cal_scan.end_time
+
+    @property
+    def scan_numbers(self):
+        if self.science_scan is not None:
+            return [self.cal_scan.scan_number, self.science_scan.scan_number]
+        else:
+            return [self.cal_scan.scan_number]
+
+    def __str__(self):
+        return "Execute PSR {:<10} ({}) for {:>4}s + {:>3}s cal at {:>4}MHz at linenumber {:>5}".format(
+            self.source,
+            self.execution_type[:3],
+            int(self.duration.total_seconds()),
+            int(self.cal_duration.total_seconds()),
+            self.frequency,
+            self.logfile_end_line,
+        )
+
+
+class GBTPulsarObservationLog(object):
+    def __init__(self, tolerance=100):
+        self._date = None
+        self._start_time = None
+        self._end_time = None
+        self._project = None
+        self._sb_name = None
+        self._mode = None
+        self._operator = None
+        self._observer = None
+        self._scans = []
+        self._filename = None
+        self._modtime = None
+        self.end_line = None
+        self.start_line = None
+        self.log_session_number = 0
+        self.observing_session_number = None
+        self._band = None
+        self.backend = None
+        self._frequency = None
+        self.other_parameters = {}
+        # not implemented
+        self._data_destination = None
+        # self.tolerance = datetime.timedelta(seconds=tolerance)
+        # not used
+        self.tolerance = tolerance
+        # not implemented yet
+        self._requests = []
+
+    def process_commands(self):
+        # match up the scans into cal/science pairs
+        new_scans = []
+        for i in range(0, len(self._scans), 2):
+            cal_scan = self._scans[i]
+            logger.debug("Identified calibration scan %s", cal_scan)
+            if self._scans[i].duration.total_seconds() >= 100:
+                logger.warning(
+                    "Exposure time of %ds for scan %d does not make sense for a calibration scan",
+                    self._scans[i].duration.total_seconds(),
+                    i,
+                )
+
+            if len(self._scans) > i + 1:
+                science_scan = self._scans[i + 1]
+                logger.debug("Identified science scan %s", science_scan)
+                if self._scans[i + 1].duration.total_seconds() < 100:
+                    logger.warning(
+                        "Exposure time of %ds for scan %d does not make sense for a science scan",
+                        self._scans[i].duration.total_seconds(),
+                        i,
+                    )
+
+            else:
+                logger.warning("Cannot identify science scan to accompany scan %d", i)
+                science_scan = None
+            obs = GBTPulsarObservation()
+            obs.cal_scan = cal_scan
+            obs.science_scan = science_scan
+            for request in self._requests:
+                if science_scan is not None and science_scan.source == request.source:
+                    logger.debug(
+                        "Identified request for science scan %s: %s",
+                        science_scan,
+                        request,
+                    )
+                    obs.request = request
+                elif science_scan is None and cal_scan.source == requests.source:
+                    logger.debug(
+                        "Identified request for cal scan %s: %s", cal_scan, request,
+                    )
+                    obs.request = request
+
+            new_scans.append(obs)
+        self._scans = new_scans
+
+    @property
+    def band(self):
+        return self._band
+
+    @band.setter
+    def band(self, value):
+        self._band = value
+        if not value in frequency_from_band.keys():
+            logger.warning(
+                "Frequency for band %s not found", value,
+            )
+        else:
+            self._frequency = frequency_from_band[value]
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @filename.setter
+    def filename(self, value):
+        self._filename = value
+        self.observing_session_number = int(self._filename.split("_")[2])
+        self._modtime = datetime.datetime.fromtimestamp(
+            os.path.getmtime(self._filename)
+        )
+
+    @property
+    def frequency(self):
+        return self._frequency
+
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @start_time.setter
+    def start_time(self, value):
+        if self._start_time is not None:
+            logger.warning(
+                "Existing observation log start time is present (%s); not overwritten!",
+                self._start_time,
+            )
+        else:
+            self._start_time = value
+
+    @property
+    def end_time(self):
+        return self._end_time
+
+    @end_time.setter
+    def end_time(self, value):
+        if self._end_time is not None:
+            logger.warning(
+                "Existing observation log end time overwritten! From %s to %s.",
+                self._end_time,
+                value,
+            )
+        self._end_time = value
+
+    @property
+    def elapsed_time(self):
+        return self.end_time - self.start_time
+
+    @property
+    def observing_time(self):
+        return sum([scan.duration for scan in self._scans], datetime.timedelta())
+
+    @property
+    def slewing_time(self):
+        return sum([scan.slew_duration for scan in self._scans], datetime.timedelta())
+
+    @property
+    def project(self):
+        return self._project
+
+    @project.setter
+    def project(self, value):
+        if self._project is not None:
+            logger.warning(
+                "Existing observation project overwritten! From %s to %s.",
+                self._project,
+                value,
+            )
+        self._project = value
+
+    @property
+    def operator(self):
+        return self._operator
+
+    @operator.setter
+    def operator(self, value):
+        if self._operator is not None:
+            logger.warning(
+                "Existing observation operator overwritten! From %s to %s.",
+                self._operator,
+                value,
+            )
+        self._operator = value
+
+    @property
+    def observer(self):
+        return self._observer
+
+    @observer.setter
+    def observer(self, value):
+        if self._observer is not None:
+            logger.warning(
+                "Existing observer overwritten! From %s to %s.", self._observer, value,
+            )
+        self._observer = value
+
+    @property
+    def sb_name(self):
+        return self._sb_name
+
+    @sb_name.setter
+    def sb_name(self, value):
+        if self._sb_name is not None:
+            logger.warning(
+                "Existing SB name overwritten! From %s to %s.", self._sb_name, value,
+            )
+        self._sb_name = value
+
+    @property
+    def date(self):
+        return self._date
+
+    @date.setter
+    def date(self, value):
+        if self._date is not None:
+            logger.warning(
+                "Existing observation date overwritten! From %s to %s.",
+                self._date,
+                value,
+            )
+        self._date = value
+
+    @property
+    def sources(self):
+        return set([scan.source for scan in self._scans])
+
+    def parse_log_line(self, line, time_format="%X"):
+        match = re.match(r"^\[(?P<time>\d{2}:\d{2}:\d{2})\]\s+(?P<message>.*)", line)
+        if match:
+            message = match.group("message")
+            _datetime = datetime.datetime.strptime(match.group("time"), time_format)
+
+            if self._date is not None:
+                _datetime = datetime.datetime.combine(
+                    self._date.date(), _datetime.time()
+                )
+                if self.start_time is not None and _datetime < self.start_time:
+                    # assume it's passed a 24h boundary
+                    _datetime += datetime.timedelta(days=1)
+
+            return GBTLogEntry(
+                datetime=_datetime, message=match.group("message").strip(),
+            )
+        else:
+            return None
+
+    @staticmethod
+    def parse_gbt_logfile(filename, start_line=0, tolerance=100):
+
+        logger.info("Looking at {} ...".format(filename))
+        log = GBTPulsarObservationLog(tolerance=tolerance)
+        log.filename = filename
+        if datetime.datetime.now() - log._modtime < datetime.timedelta(seconds=60):
+            logger.warning(
+                "File modification time was only %d sec ago...File may still be in progress.",
+                (datetime.datetime.now() - log._modtime).total_seconds(),
+            )
+        f = open(filename)
+        line_iterator = f.__iter__()
+        line_num = 0
+        log.start_line = start_line
+        if start_line > 0:
+            logger.info(
+                "Starting at line %d", start_line,
+            )
+        while line_num < start_line:
+            next(line_iterator)
+            line_num += 1
+        slewing = None
+        source = None
+        last_message = None
+        log_entry = None
+        for line in line_iterator:
+            # the stuff above here appears to be pre-amble
+            # containing the astrid code etc
+            # actual log starts with
+            """
+            #######################################################
+             LOG SESSION NUMBER 1 
+             """
+            if log.log_session_number == 0:
+                match = re.match(r"\s*LOG SESSION NUMBER (\d+)", line)
+                if match:
+                    log.log_session_number = int(match.groups()[0])
+                    log.start_line = line_num
+                    logger.info(
+                        "Session %d started on line %d",
+                        log.log_session_number,
+                        line_num,
+                    )
+
+                # the band gets set early on in the ASTRID setup
+                # it is only used in setting the band for the requests
+                match = re.match(r"^band\s+=\s+'(\w+)?'", line.strip())
+                if match:
+                    log.band = match.groups()[0]
+                    logger.info(
+                        "Setting frequency to %.1f (%s band) line %s",
+                        log.frequency,
+                        log.band,
+                        line_num,
+                    )
+
+                match = re.match(r"^backend\s+=\s+'(.*)?'", line.strip())
+                if match:
+                    log.backend = match.groups()[0]
+                    logger.info(
+                        "Setting backend to %%s", log.backend, line_num,
+                    )
+
+            else:
+                # if we get here, then the pre-amble is finished
+                # keep track of the last line as well, since that helps interpret some things
+                if log_entry is not None:
+                    last_message = log_entry.message
+                log_entry = log.parse_log_line(line)
+                if log_entry is not None:
+                    if (
+                        "observer" in log_entry.message
+                        and last_message == "******** Begin Scheduling Block"
+                    ):
+                        """
+                        A line like:
+                        [23:02:13] ******** observer = Zaven Arzoumanian, SB name = nanograv_timing_vegas, project ID = AGBT18B_226, date = 06 Sep 2019
+
+                        but only after:
+                        [23:02:13] ******** Begin Scheduling Block
+                        """
+                        entries = log_entry.message.split(",")
+                        for entry in entries:
+                            key, value = entry.split("=")
+                            if "observer" in key.strip():
+                                log.observer = value.strip()
+                            elif "SB name" in key.strip():
+                                log.sb_name = value.strip()
+                            elif "project ID" in key.strip():
+                                log.project = value.strip()
+                            elif "date" in key.strip():
+                                log.date = datetime.datetime.strptime(
+                                    value.strip(), "%d %b %Y"
+                                )
+                        logger.info(
+                            "Observer: %s; SB name: %s; Project: %s",
+                            log.observer,
+                            log.sb_name,
+                            log.project,
+                        )
+                        log.start_time = datetime.datetime.combine(
+                            log.date, log_entry.datetime.time()
+                        )
+                    elif log_entry.message.startswith("Src"):
+                        # a planned observation
+                        """
+                        [23:02:13]   Src 'J1713+0747' start:2019-09-06 23:02:13.11, stop:2019-09-06 23:21:28.74
+                        """
+                        match = re.match(
+                            r"^Src\s+'(?P<source>.*?)'\s+start:(?P<starttime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.\d{2}, stop:(?P<endtime>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.\d{2}",
+                            log_entry.message,
+                        )
+
+                        if match:
+                            request = GBTPulsarObservationRequest()
+                            request.source = match.group("source")
+                            request.start_time = datetime.datetime.strptime(
+                                match.group("starttime"), "%Y-%m-%d %H:%M:%S"
+                            )
+                            request.end_time = datetime.datetime.strptime(
+                                match.group("endtime"), "%Y-%m-%d %H:%M:%S"
+                            )
+                            request.frequency = log.frequency
+                            log._requests.append(request)
+                            logger.info(
+                                "Request to %s line %d", request, line_num,
+                            )
+
+                    elif log_entry.message.startswith("source"):
+                        source = log_entry.message.split(":")[1].strip()
+                    elif log_entry.message == "Slewing to source.":
+                        logger.info(
+                            "Starting to slew to %s at %s", source, log_entry.datetime,
+                        )
+                        slewing = GBTSlewingExecution()
+                        slewing.source = source
+                        slewing.start_time = log_entry.datetime
+                        slewing.logfile_start_line = line_num
+                    elif "*** Notice: This subscan" in log_entry.message:
+                        match = re.match(
+                            r"^\*\*\* Notice: This subscan will be numbered as scan #(\d+) in your data reduction package.",
+                            log_entry.message,
+                        )
+                        if match:
+                            scan = GBTPulsarScan()
+                            scan.scan_number = int(match.groups()[0])
+                            scan.start_time = log_entry.datetime
+                            scan.slewing = slewing
+                            scan.source = source
+                            scan.logfile_start_line = line_num
+                            scan.frequency = float(log.other_parameters["restfreq"])
+                            logger.info(
+                                "Starting observation of source %s at %s",
+                                source,
+                                log_entry.datetime,
+                            )
+                    elif log_entry.message == "Setting State: Ready":
+                        # see if this is the first one since slewing started
+                        if slewing is not None:
+                            if (
+                                slewing.start_time is not None
+                                and slewing.end_time is None
+                            ):
+                                slewing.end_time = log_entry.datetime
+                                slewing.logfile_end_line = line_num
+                                logger.info(
+                                    "Slewing to %s ended at %s line %d",
+                                    source,
+                                    log_entry.datetime,
+                                    line_num,
+                                )
+
+                    elif log_entry.message == "Setting State: Stopping":
+                        # this is tricky, since it doesn't say what operating it's stopping
+                        if scan is not None:
+                            if scan.start_time is not None and scan.end_time is None:
+                                scan.end_time = log_entry.datetime
+                                scan.logfile_end_line = line_num
+                                logger.info(
+                                    "Stopping observation of source %s at %s",
+                                    source,
+                                    log_entry.datetime,
+                                )
+                                log._scans.append(scan)
+
+                    elif log_entry.message == "******** End Scheduling Block":
+                        log._end_time = log_entry.datetime
+                        log.end_line = line_num
+
+                elif "=" in line:
+                    key, value = line.split("=")
+                    log.other_parameters[key.strip()] = value.strip()
+            line_num += 1
+
+        f.close()
+        log.process_commands()
+
+        return log
+
+    def construct_filenames(self, scan):
+        return map(str, scan.scan_numbers)
+
+    def print_results(self, output=sys.stdout):
+        print(
+            "##############################\n### Report for: {} starting at line {}".format(
+                self.filename, self.start_line,
+            ),
+            file=output,
+        )
+
+        if self.start_time is None:
+            return None
+
+        print(
+            "### NANOGrav {} observation ({:.1f}h elapsed; {:.1f}h observing; {:.1f}m slewing; {} scans {} sources)".format(
+                self.project,
+                self.elapsed_time.total_seconds() / 3600,
+                self.observing_time.total_seconds() / 3600,
+                self.slewing_time.total_seconds() / 60,
+                len(self._scans),
+                len(self.sources),
+            ),
+            file=output,
+        )
+
+        print(
+            "### Backend: {}".format(self.backend), file=output,
+        )
+
+        print("### {} - {}".format(self.start_time, self.end_time), file=output)
+
+        # if self.data_destination is None:
+        #    logger.warning("Data destination is not set")
+        self._scans.sort(key=lambda x: x.start_time)
+        for scan_prev, scan_current in zip([None] + self._scans, self._scans):
+            if scan_prev is None:
+                time_gap = scan_current.start_time - self._start_time
+            else:
+                time_gap = scan_current.start_time - scan_prev.end_time
+
+            """
+            if scan_current.duration < scan_current.requested_duration:
+
+                note = ["-"] * int(
+                    (
+                        scan_current.requested_duration - scan_current.executed_duration
+                    ).total_seconds()
+                    / float(self.tolerance)
+                )
+                note = "".join(note)
+            else:
+                note = ["+"] * int(
+                    (
+                        scan_current.executed_duration - scan_current.requested_duration
+                    ).total_seconds()
+                    / float(self.tolerance)
+                )
+                note = "".join(note)
+                """
+            note = ""
+
+            print(
+                "{:>6} sec ({:>6} sec slewing) --> {} at {} ({} sec requested) {}".format(
+                    int(time_gap.total_seconds()),
+                    int(scan_current.slewing.duration.total_seconds()),
+                    scan_current,
+                    scan_current.start_time,
+                    int(scan_current.requested_duration.total_seconds()),
+                    note,
+                ),
+                file=output,
+            )
+
+            print(
+                "\tWriting to {}".format(
+                    ", ".join(self.construct_filenames(scan_current)),
                 ),
                 file=output,
             )

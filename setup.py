@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="cima_log_parser",
+    name="log_parser",
     version="0.1.0",
     description="Parsing Arecibo CIMA logs and PUPPI command file for NANOGrav",
     author="David Kaplan",
@@ -10,8 +10,9 @@ setup(
     packages=find_packages(),
     entry_points={
         "console_scripts": [
-            "parse_cimalog=cima_log_parser.scripts.parse_cimalog:main",
-            "parse_puppi=cima_log_parser.scripts.parse_puppi:main",
+            "parse_cimalog=log_parser.scripts.parse_cimalog:main",
+            "parse_gbtlog=log_parser.scripts.parse_gbtlog:main",
+            "parse_puppi=log_parser.scripts.parse_puppi:main",
         ],
     },
     python_requires=">=2.7",
