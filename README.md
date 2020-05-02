@@ -1,6 +1,6 @@
 # LogParse 
 
-Methods to parse Arecibo PUPPI command files and CIMA logs.
+Methods to parse Arecibo PUPPI command files, CIMA logs, and GBT pulsar observing logs.
 
 ## Dependencies:
 All standard python, 2 (>=2.7) or 3: re, logging, datetime, sys, collections, os
@@ -90,6 +90,9 @@ optional arguments:
   --tolerance TOLERANCE
                         Tolerance for printing out exposure difference marks
                         (default: 100)
+  --slack, -s           Send results to slack (requires ~/.slackurl) (default:
+                        False)
+ 
   --out OUT, -o OUT     Output destination (default: stdout)
   --verbose, -v         Increase verbosity (default: 0)
 ```
@@ -196,6 +199,84 @@ INFO:log_parser:Ending pulsar observation at 2020-02-14 16:24:03 line = 11931
 ```
 
 Options:
-* Can specify files directly, or by looking back `--days` in a directory
+* Can specify files directly, or by looking back `--days` in a directory (based on filename)
 * Will only look for logs of the specified programs
 * Can write to a file instead of `stdout`
+* Can post to slack.
+
+## GBT Logs
+```
+parse_gbtlog -h
+usage: parse_gbtlog [-h] [--file FILE [FILE ...]] [--directory DIRECTORY]
+                    [--days DAYS] [--tolerance TOLERANCE] [--slack]
+                    [--out OUT] [--verbose]
+
+Parse an GBT log file
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --file FILE [FILE ...], -f FILE [FILE ...]
+                        Name(s) of GBT log file(s) (default: None)
+  --directory DIRECTORY, -d DIRECTORY
+                        Directory to search for log files (default: ./)
+  --days DAYS, -t DAYS  Days in the past to look for log files (<=0: find all)
+                        (default: 1)
+  --tolerance TOLERANCE
+                        Tolerance for printing out exposure difference marks
+                        (default: 100)
+  --slack, -s           Send results to slack (requires ~/.slackurl) (default:
+                        False)
+  --out OUT, -o OUT     Output destination (default: stdout)
+  --verbose, -v         Increase verbosity (default: 0)
+```
+
+```
+parse_gbtlog -f examples/logs/AGBT18B_226_150_log.txt -v
+INFO:log_parser:Looking at examples/logs/AGBT18B_226_150_log.txt ...
+INFO:log_parser:Setting frequency to 1500.0 (L band) line 11
+INFO:log_parser:Setting backend to VEGAS/GUPPI line 69
+INFO:log_parser:Session 1 started on line 217
+INFO:log_parser:Observer: Zaven Arzoumanian; SB name: nanograv_timing_vegas; Project: AGBT18B_226
+INFO:log_parser:Request to Observe J1713+0747 at 1500 MHz for 0:19:15 line 225
+INFO:log_parser:Request to Observe J1909-3744 at 1500 MHz for 0:19:16 line 226
+INFO:log_parser:Request to Observe J0740+6620 at 1500 MHz for 0:19:16 line 227
+INFO:log_parser:Starting to slew to J1713+0747 at 2019-09-06 23:02:44
+INFO:log_parser:Slewing to J1713+0747 ended at 2019-09-06 23:05:31 line 317
+INFO:log_parser:Starting to slew to J1713+0747 at 2019-09-06 23:06:11
+INFO:log_parser:Slewing to J1713+0747 ended at 2019-09-06 23:06:14 line 375
+INFO:log_parser:Starting observation of source J1713+0747 at 2019-09-06 23:07:09
+INFO:log_parser:Stopping observation of source J1713+0747 at 2019-09-06 23:08:41
+INFO:log_parser:Starting observation of source J1713+0747 at 2019-09-06 23:09:21
+INFO:log_parser:Stopping observation of source J1713+0747 at 2019-09-06 23:21:28
+INFO:log_parser:Starting to slew to J1909-3744 at 2019-09-06 23:21:36
+INFO:log_parser:Slewing to J1909-3744 ended at 2019-09-06 23:24:37 line 566
+INFO:log_parser:Starting observation of source J1909-3744 at 2019-09-06 23:25:34
+INFO:log_parser:Stopping observation of source J1909-3744 at 2019-09-06 23:27:04
+INFO:log_parser:Starting observation of source J1909-3744 at 2019-09-06 23:27:44
+INFO:log_parser:Stopping observation of source J1909-3744 at 2019-09-06 23:40:44
+INFO:log_parser:Starting to slew to J0740+6620 at 2019-09-06 23:40:50
+INFO:log_parser:Slewing to J0740+6620 ended at 2019-09-06 23:46:02 line 756
+INFO:log_parser:Starting observation of source J0740+6620 at 2019-09-06 23:46:57
+INFO:log_parser:Stopping observation of source J0740+6620 at 2019-09-06 23:48:29
+INFO:log_parser:Starting observation of source J0740+6620 at 2019-09-06 23:49:09
+INFO:log_parser:Stopping observation of source J0740+6620 at 2019-09-07 00:00:00
+##############################
+### Report for: examples/logs/AGBT18B_226_150_log.txt starting at line 217
+### NANOGrav AGBT18B_226 observation (1.0h elapsed; 0.6h observing; 8.3m slewing; 3 scans 3 sources)
+### Backend: VEGAS/GUPPI
+### 2019-09-06 23:02:13 - 2019-09-07 00:00:12
+   428 sec (     3 sec slewing) --> Execute PSR J1713+0747 (std) for  727s +  92s cal at 1500.0MHz at linenumber   551 at 2019-09-06 23:09:21 (1155 sec requested) 
+	Writing to 1, 2
+   376 sec (   181 sec slewing) --> Execute PSR J1909-3744 (std) for  780s +  90s cal at 1500.0MHz at linenumber   741 at 2019-09-06 23:27:44 (1156 sec requested) 
+	Writing to 3, 4
+   505 sec (   312 sec slewing) --> Execute PSR J0740+6620 (std) for  651s +  92s cal at 1500.0MHz at linenumber   931 at 2019-09-06 23:49:09 (1156 sec requested) 
+	Writing to 5, 6
+```
+
+Options:
+* Can specify files directly, or by looking back `--days` in a directory (based on file modification time) while traversing directory tree
+* Can write to a file instead of `stdout`
+* Can post to slack.
+
+## Notes on Slack:
+Uses standard webhook with a `post` for JSON payload: e.g., [webhooks guide](https://notes.ayushsharma.in/2017/09/posting-messages-to-slack-using-incoming-webhooks-and-python-requests-api).  You generate a custom URL as described there and put it into a file `~/.slackurl` in the home directory of whatever user is running the script.  This URL determines the slack site and channel for posting.  
