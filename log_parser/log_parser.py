@@ -139,9 +139,13 @@ class CIMAPulsarObservationRequest(object):
 
     @property
     def source_matches(self):
+        # we don't know if the par file will be J1234+56 or 1234+56
         return (
             os.path.splitext(os.path.basename(self.parfile))[0].replace(".par", "")
             == self.source[1:]
+        ) or (
+            os.path.splitext(os.path.basename(self.parfile))[0].replace(".par", "")
+            == self.source
         )
 
     @property
