@@ -132,6 +132,7 @@ class CIMAPulsarObservationRequest(object):
         self.pulsaron_executive_line_number = None
         self.parfile = None
         self.power_check = False
+        self.type = "std"
 
     @property
     def executed(self):
@@ -139,14 +140,20 @@ class CIMAPulsarObservationRequest(object):
 
     @property
     def source_matches(self):
-        # we don't know if the par file will be J1234+56 or 1234+56
-        return (
-            os.path.splitext(os.path.basename(self.parfile))[0].replace(".par", "")
-            == self.source[1:]
-        ) or (
-            os.path.splitext(os.path.basename(self.parfile))[0].replace(".par", "")
-            == self.source
-        )
+        if self.type == "std":
+            if self.parfile is None:
+                logger.warning("No par file found for observation of %s", self.source)
+
+                return False
+            # we don't know if the par file will be J1234+56 or 1234+56 so test for both
+            return (
+                os.path.splitext(os.path.basename(self.parfile))[0].replace(".par", "")
+                == self.source[1:]
+            ) or (
+                os.path.splitext(os.path.basename(self.parfile))[0].replace(".par", "")
+                == self.source
+            )
+        return True
 
     @property
     def parses(self):
@@ -939,6 +946,18 @@ class CIMAPulsarObservationPlans(object):
                 commands.requested_commands[-1].pulsaron_command_line_number = int(
                     line_number
                 )
+            elif "EXEC ponoffcal" in cmd:
+                # also terminate a pulsar observing block
+                # for calibration
+                commands.requested_commands[-1].pulsaron_command_line_number = int(
+                    line_number
+                )
+                commands.requested_commands[-1].type = "cal"
+                match = re.match(r'EXEC ponoffcal "(\d+)".*', cmd)
+                if match:
+                    commands.requested_commands[-1].duration = datetime.timedelta(
+                        seconds=int(match.groups()[0]),
+                    )
         f.close()
 
         # go through the requested commands
@@ -948,7 +967,8 @@ class CIMAPulsarObservationPlans(object):
                 logger.warning(
                     "Requested scan of %s for %d sec at %d MHz [line=%d] was not executed.",
                     request.source,
-                    request.duration.total_seconds(),
+                    0,
+                    # request.duration.total_seconds(),
                     request.frequency,
                     request.setup_command_line_number,
                 )
@@ -970,6 +990,8 @@ class CIMAPulsarObservationPlans(object):
             note = ""
             if not request.parses:
                 note = "*"
+            if not request.type == "std":
+                note = request.type
             print(
                 "Request PSR {:<10} for {:>4}s at {:>4}MHz at linenumber {:>5} {}".format(
                     request.source,
