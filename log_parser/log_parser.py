@@ -1150,7 +1150,10 @@ class GBTPulsarObservationRequest(object):
 
     @property
     def duration(self):
-        return self.end_time - self.start_time
+        if self.start_time is not None and self.end_time is not None:
+            return self.end_time - self.start_time
+        else:
+            return datetime.timedelta(seconds=0)
 
     def __str__(self):
         return "Observe {} at {} MHz for {}".format(
