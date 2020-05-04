@@ -182,6 +182,13 @@ class CIMAPulsarObservationExecution(object):
     def duration(self):
         return self.end_time - self.start_time
 
+    @property
+    def slew_duration(self):
+        if self.slewing is not None:
+            return self.slewing.duration
+        else:
+            return datetime.timedelta(seconds=0)
+
 
 class CIMASlewingExecution(object):
     def __init__(self):
@@ -204,7 +211,7 @@ class CIMAPulsarScan(object):
 
     @property
     def slew_duration(self):
-        return self.execution.slewing.end_time - self.execution.slewing.start_time
+        return self.execution.slewing_duration
 
     @property
     def start_time(self):
@@ -366,7 +373,7 @@ class CIMAPulsarObservationLog(object):
             print(
                 "{:>6} sec ({:>6} sec slewing) --> {} at {} ({} sec requested) {}".format(
                     int(time_gap.total_seconds()),
-                    int(scan_current.execution.slewing.duration.total_seconds()),
+                    int(scan_current.execution.slew_duration.total_seconds()),
                     scan_current,
                     scan_current.start_time,
                     int(scan_current.requested_duration.total_seconds()),
@@ -423,7 +430,7 @@ class CIMAPulsarObservationLog(object):
     @property
     def slewing_time(self):
         return sum(
-            [scan.execution.slewing.duration for scan in self._scans],
+            [scan.execution.slew_duration for scan in self._scans],
             datetime.timedelta(),
         )
 
@@ -593,7 +600,7 @@ class CIMAPulsarObservationLog(object):
             ):
                 log.backend = log_entry.message.split()[4].replace("'", "")
                 logger.info(
-                    "Setting backend to %%s", log.backend, line_num,
+                    "Setting backend to %s line %d", log.backend, line_num,
                 )
 
             # where were the data written
@@ -723,7 +730,6 @@ class CIMAPulsarObservationLog(object):
                             execution.request.source,
                             line_num,
                         )
-                        execution
                 else:
                     logger.error(
                         "Failed to parse run_command_line for PULSARON: %s",
@@ -745,6 +751,14 @@ class CIMAPulsarObservationLog(object):
                     execution = CIMAPulsarObservationExecution()
                     execution.request = log.requested_commands[exec_line_num]
                     execution.logfile_start_line = line_num
+                    execution.slewing = slewing
+                    if not (slewing.source == execution.request.source):
+                        logger.warning(
+                            "Tracking source %s, but observation request is for source %s (line %d)",
+                            slewing.source,
+                            execution.request.source,
+                            line_num,
+                        )
                 else:
                     logger.error(
                         "Failed to parse run_command_line for ponoffcal: %s",
@@ -1052,7 +1066,10 @@ class GBTPulsarScan(object):
 
     @property
     def slew_duration(self):
-        return self.slewing.end_time - self.slewing.start_time
+        if self.slewing is not None:
+            return self.slewing.duration
+        else:
+            return datetime.timedelta(seconds=0)
 
     @property
     def duration(self):
@@ -1655,7 +1672,7 @@ class GBTPulsarObservationLog(object):
             print(
                 "{:>6} sec ({:>6} sec slewing) --> {} at {} ({} sec requested) {}".format(
                     int(time_gap.total_seconds()),
-                    int(scan_current.slewing.duration.total_seconds()),
+                    int(scan_current.slew_duration.total_seconds()),
                     scan_current,
                     scan_current.start_time,
                     int(scan_current.requested_duration.total_seconds()),
