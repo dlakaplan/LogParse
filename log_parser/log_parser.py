@@ -180,13 +180,30 @@ class CIMAPulsarObservationExecution(object):
 
     @property
     def duration(self):
-        return self.end_time - self.start_time
+        if self.end_time is not None and self.start_time is not None:
+            return self.end_time - self.start_time
+        else:
+            if self.start_time is None:
+                logger.error(
+                    "start_time not defined for observation starting on line %d",
+                    self.logfile_start_line,
+                )
+            else:
+                logger.error(
+                    "end_time not defined for observation starting on line %d",
+                    self.logfile_start_line,
+                )
+            return datetime.timedelta(seconds=0)
 
     @property
     def slew_duration(self):
         if self.slewing is not None:
             return self.slewing.duration
         else:
+            logger.error(
+                "Slew not defined for observation starting on line %d",
+                self.logfile_start_line,
+            )
             return datetime.timedelta(seconds=0)
 
 
@@ -201,7 +218,20 @@ class CIMASlewingExecution(object):
 
     @property
     def duration(self):
-        return self.end_time - self.start_time
+        if self.end_time is not None and self.start_time is not None:
+            return self.end_time - self.start_time
+        else:
+            if self.start_time is None:
+                logger.error(
+                    "start_time not defined for slew starting on line %d",
+                    self.logfile_start_line,
+                )
+            else:
+                logger.error(
+                    "end_time not defined for slew starting on line %d",
+                    self.logfile_start_line,
+                )
+            return datetime.timedelta(seconds=0)
 
 
 class CIMAPulsarScan(object):
@@ -211,39 +241,75 @@ class CIMAPulsarScan(object):
 
     @property
     def slew_duration(self):
-        return self.execution.slewing_duration
+        if self.execution is not None:
+            return self.execution.slewing_duration
+        else:
+            logger.error("Execution not defined: cannot return slew time")
+            return datetime.timedelta(seconds=0)
 
     @property
     def start_time(self):
-        return self.execution.start_time
+        if self.execution is not None:
+            return self.execution.start_time
+        else:
+            logger.error("Execution of scan not found: cannot return start time")
+            return datetime.datetime(2000, 0, 0, 0, 0, 0)
 
     @property
     def end_time(self):
-        return self.execution.end_time
+        if self.execution is not None:
+            return self.execution.end_time
+        else:
+            logger.error("Execution of scan not found: cannot return end time")
+            return datetime.datetime(2000, 0, 0, 0, 0, 0)
 
     @property
     def executed_duration(self):
-        return self.execution.end_time - self.execution.start_time
+        if self.execution is not None:
+            return self.execution.end_time - self.execution.start_time
+        else:
+            logger.error("Execution not defined: cannot return duration")
+            return datetime.timedelta(seconds=0)
 
     @property
     def requested_duration(self):
-        return self.request.duration
+        if self.request is not None:
+            return self.request.duration
+        else:
+            logger.error("Request not defined: cannot return duration")
+            return datetime.timedelta(seconds=0)
 
     @property
     def frequency(self):
-        return self.request.frequency
+        if self.request is not None:
+            return self.request.frequency
+        else:
+            logger.error("Request not defined: cannot return frequency")
+            return 0
 
     @property
     def source(self):
-        return self.request.source
+        if self.request is not None:
+            return self.request.source
+        else:
+            logger.error("Request not defined: cannot return source")
+            return "None"
 
     @property
     def logfile_start_line(self):
-        return self.execution.logfile_start_line
+        if self.execution is not None:
+            return self.execution.logfile_start_line
+        else:
+            logger.error("Execution not defined: cannot return start line")
+            return -1
 
     @property
     def logfile_end_line(self):
-        return self.execution.logfile_end_line
+        if self.execution is not None:
+            return self.execution.logfile_end_line
+        else:
+            logger.error("Execution not defined: cannot return end line")
+            return -1
 
     def __str__(self):
         return "Execute PSR {:<10} ({}) for {:>4}s at {:>4}MHz at linenumber {:>5}".format(
@@ -405,7 +471,13 @@ class CIMAPulsarObservationLog(object):
 
     @property
     def end_time(self):
-        return self._end_time
+        if self._end_time is not None:
+            return self._end_time
+        else:
+            logger.error(
+                "end time is not set for log starting on line %d", self.start_line
+            )
+            return datetime.datetime(2000, 0, 0, 0, 0, 0)
 
     @end_time.setter
     def end_time(self, value):
@@ -436,7 +508,13 @@ class CIMAPulsarObservationLog(object):
 
     @property
     def project(self):
-        return self._project
+        if self._project is not None:
+            return self._project
+        else:
+            logger.error(
+                "project is not set for log starting on line %d", self.start_line
+            )
+            return "None"
 
     @project.setter
     def project(self, value):
@@ -450,7 +528,11 @@ class CIMAPulsarObservationLog(object):
 
     @property
     def mode(self):
-        return self._mode
+        if self._mode is not None:
+            return self._mode
+        else:
+            logger.error("mode is not set for log starting on line %d", self.start_line)
+            return "None"
 
     @mode.setter
     def mode(self, value):
@@ -466,7 +548,13 @@ class CIMAPulsarObservationLog(object):
 
     @property
     def operator(self):
-        return self._operator
+        if self._operator is not None:
+            return self._operator
+        else:
+            logger.error(
+                "operator is not set for log starting on line %d", self.start_line
+            )
+            return "None"
 
     @operator.setter
     def operator(self, value):
@@ -480,7 +568,13 @@ class CIMAPulsarObservationLog(object):
 
     @property
     def filename(self):
-        return self._filename
+        if self._filename is not None:
+            return self._filename
+        else:
+            logger.error(
+                "filename is not set for log starting on line %d", self.start_line
+            )
+            return "None"
 
     @filename.setter
     def filename(self, value):
@@ -491,7 +585,14 @@ class CIMAPulsarObservationLog(object):
 
     @property
     def data_destination(self):
-        return self._data_destination
+        if self._data_destination is not None:
+            return self._data_destination
+        else:
+            logger.error(
+                "data destination is not set for log starting on line %d",
+                self.start_line,
+            )
+            return "None"
 
     @data_destination.setter
     def data_destination(self, value):
@@ -505,7 +606,13 @@ class CIMAPulsarObservationLog(object):
 
     @property
     def command_file(self):
-        return self._command_file
+        if self._command_file is not None:
+            return self._command_file
+        else:
+            logger.error(
+                "command file is not set for log starting on line %d", self.start_line,
+            )
+            return "None"
 
     @command_file.setter
     def command_file(self, value):
