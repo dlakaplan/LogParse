@@ -6,6 +6,7 @@ import logging
 import datetime
 import sys
 import os
+import pytz
 from collections import namedtuple
 
 
@@ -21,6 +22,9 @@ GBTLogEntry = namedtuple("LogEntry", ["datetime", "message"])
 # mapping between band name and frequency
 # adjust as needed
 frequency_from_band = {"L": 1500, "S": 2300, "820": 820}
+
+gbt_tz = pytz.timezone("America/New_York")
+ao_tz = pytz.timezone("America/Puerto_Rico")
 
 
 def parse_cima_log_line(line, datetime_format="%Y-%b-%d %X"):
@@ -44,7 +48,10 @@ def parse_cima_log_line(line, datetime_format="%Y-%b-%d %X"):
         line,
     )
     if match:
-        _datetime = datetime.datetime.strptime(match.group("datetime"), datetime_format)
+        # times in the CIMA log are local
+        _datetime = ao_tz.localize(
+            datetime.datetime.strptime(match.group("datetime"), datetime_format)
+        )
         return CIMALogEntry(
             datetime=_datetime,
             levelname=match.group("levelname"),
@@ -253,7 +260,7 @@ class CIMAPulsarScan(object):
             return self.execution.start_time
         else:
             logger.error("Execution of scan not found: cannot return start time")
-            return datetime.datetime(2000, 0, 0, 0, 0, 0)
+            return datetime.datetime(2000, 0, 0, 0, 0, 0, tzinfo=ao_tz)
 
     @property
     def end_time(self):
@@ -261,7 +268,7 @@ class CIMAPulsarScan(object):
             return self.execution.end_time
         else:
             logger.error("Execution of scan not found: cannot return end time")
-            return datetime.datetime(2000, 0, 0, 0, 0, 0)
+            return datetime.datetime(2000, 0, 0, 0, 0, 0, tzinfo=ao_tz)
 
     @property
     def executed_duration(self):
@@ -477,7 +484,7 @@ class CIMAPulsarObservationLog(object):
             logger.error(
                 "end time is not set for log starting on line %d", self.start_line
             )
-            return datetime.datetime(2000, 0, 0, 0, 0, 0)
+            return datetime.datetime(2000, 0, 0, 0, 0, 0, tzinfo=ao_tz)
 
     @end_time.setter
     def end_time(self, value):
@@ -1501,11 +1508,13 @@ class GBTPulsarObservationLog(object):
         match = re.match(r"^\[(?P<time>\d{2}:\d{2}:\d{2})\]\s+(?P<message>.*)", line)
         if match:
             message = match.group("message")
-            _datetime = datetime.datetime.strptime(match.group("time"), time_format)
+            _datetime = gbt_tz.localize(
+                datetime.datetime.strptime(match.group("time"), time_format)
+            )
 
             if self._date is not None:
-                _datetime = datetime.datetime.combine(
-                    self._date.date(), _datetime.time()
+                _datetime = gbt_tz.localize(
+                    datetime.datetime.combine(self._date.date(), _datetime.time())
                 )
                 if self.start_time is not None and _datetime < self.start_time:
                     # assume it's passed a 24h boundary
@@ -1618,8 +1627,10 @@ class GBTPulsarObservationLog(object):
                             log.sb_name,
                             log.project,
                         )
-                        log.start_time = datetime.datetime.combine(
-                            log.date, log_entry.datetime.time()
+                        log.start_time = gbt_tz.localize(
+                            datetime.datetime.combine(
+                                log.date, log_entry.datetime.time()
+                            )
                         )
                     elif log_entry.message.startswith("Src"):
                         # a planned observation
@@ -1634,11 +1645,15 @@ class GBTPulsarObservationLog(object):
                         if match:
                             request = GBTPulsarObservationRequest()
                             request.source = match.group("source")
-                            request.start_time = datetime.datetime.strptime(
-                                match.group("starttime"), "%Y-%m-%d %H:%M:%S"
+                            request.start_time = gbt_tz.localize(
+                                datetime.datetime.strptime(
+                                    match.group("starttime"), "%Y-%m-%d %H:%M:%S",
+                                )
                             )
-                            request.end_time = datetime.datetime.strptime(
-                                match.group("endtime"), "%Y-%m-%d %H:%M:%S"
+                            request.end_time = gbt_tz.localize(
+                                datetime.datetime.strptime(
+                                    match.group("endtime"), "%Y-%m-%d %H:%M:%S",
+                                )
                             )
                             request.frequency = log.frequency
                             log._requests.append(request)
