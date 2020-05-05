@@ -2,8 +2,13 @@
 
 Methods to parse Arecibo PUPPI command files, CIMA logs, and GBT pulsar observing logs.
 
+[![Build Status](https://travis-ci.com/dlakaplan/LogParse.svg?branch=master)](https://travis-ci.com/dlakaplan/LogParse)
+
 ## Dependencies:
 All standard python, 2 (>=2.7) or 3: re, logging, datetime, sys, collections, os
+
+For python 2, needs `requests`
+
 
 ## Installation:
 ```
