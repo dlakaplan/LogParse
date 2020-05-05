@@ -18,4 +18,9 @@ setup(
     python_requires=">=2.7",
     include_package_data=True,
     zip_safe=False,
+    extras_require={
+        ':python_version == "2.7"': [
+            'requests',
+        ],
+    },
 )
