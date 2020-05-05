@@ -1145,7 +1145,11 @@ class GBTSlewingExecution(object):
 
     @property
     def duration(self):
-        return self.end_time - self.start_time
+        if self.start_time is not None and self.end_time is not None:
+            return self.end_time - self.start_time
+        else:
+            logger.error("Slew object missing start time or end time")
+            return datetime.timedelta(seconds=0)
 
 
 class GBTPulsarObservationRequest(object):
@@ -1160,6 +1164,7 @@ class GBTPulsarObservationRequest(object):
         if self.start_time is not None and self.end_time is not None:
             return self.end_time - self.start_time
         else:
+            logger.error("Observation request missing start time or end time")
             return datetime.timedelta(seconds=0)
 
     def __str__(self):
@@ -1186,11 +1191,22 @@ class GBTPulsarScan(object):
         if self.slewing is not None:
             return self.slewing.duration
         else:
+            logger.error(
+                "Slew duration not defined for pulsar scan at line %d",
+                self.logfile_start_line,
+            )
             return datetime.timedelta(seconds=0)
 
     @property
     def duration(self):
-        return self.end_time - self.start_time
+        if self.start_time is not None and self.end_time is not None:
+            return self.end_time - self.start_time
+        else:
+            logger.error(
+                "Observation missing start time or end time for pulsar scan at line %d",
+                self.logfile_start_line,
+            )
+            return datetime.timedelta(seconds=0)
 
     def __str__(self):
         return "Execute PSR {:<10} ({}) for {:>4}s at {:>4}MHz at linenumber {:>5}".format(
@@ -1240,7 +1256,7 @@ class GBTPulsarObservation(object):
 
     @property
     def slew_duration(self):
-        return self.slewing.end_time - self.slewing.start_time
+        return self.slewing.duration
 
     @property
     def duration(self):
