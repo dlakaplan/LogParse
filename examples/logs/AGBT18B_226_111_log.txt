@@ -1,0 +1,1156 @@
+ 
+ 
+#######################################################
+ SCRIPT NUMBER 1, project:AGBT18B_226_111 
+ 231097 63 Scott Ransom 12 Rob Taggart 2019-05-31 05:31:37 obs_completed 
+#######################################################
+# NANOGrav timing astrid block, 2012/02 PBD
+# Modified for GUPPI + VEGAS, 2018/03 KS
+
+# IMPORTANT!  Edit this to pick which band you're observing#
+band = '820'
+#band = 'L'
+#band = 'S'
+
+# IMPORTANT!  Edit this to pick which session you're observing
+# All sources in the catalog will be observed in order, with the 
+# remaining session time divided evenly between them. To 
+# restart a interrupted session, first edit the catalog and comment
+# out sources that have already been observed today.
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_A.cat")
+srcs = Catalog("/users/pdemores/sched/18B226_2018_session_B.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_C.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_D.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_E.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_F.cat")
+#Use personal catalog file, rather than editing Paul's files:
+#srcs = Catalog("/users/jswiggum/nanograv/18B226_2018_session_D.cat")
+
+# IMPORTANT!  Edit here to set the session's start/stop times in UTC!
+# NOTES:
+#  - start time does not need to be edited if the script is stopped/restarted.
+#    it will always use the current time when running 'for real'.
+#  - don't use any leading 0's in the values here, (leading 0 is code for
+#    octal).
+from mx import DateTime
+# Function args are year, month, day, hour (24 hr), min, sec (UTC)
+sess_start_time = DateTime.DateTime(2019,5,31,5,30,0) # UTC
+sess_stop_time = DateTime.DateTime(2019,5,31,8,30,0) # UTC
+
+# Use fixed start time rather than current time.
+fix = False
+
+############## You should not need to edit below this line ###########
+
+execfile("/users/pdemores/config/astrid_utils.py")
+#execfile("/users/pdemores/config/astrid_cals.py")
+
+if Now() != None and not fix:
+    print "Using current time for session start"
+    sess_start_time = Now()
+sess_len = float(sess_stop_time - sess_start_time) / 3600.0
+print "Session time remaining = %.1fh" % sess_len
+
+nsrc = len(srcs.keys())
+print "nsrc = %d" % (nsrc)
+time_per_src = sess_len / float(nsrc) # hours
+print "time_per_src = %.1f min" % (time_per_src * 60.0)
+stop_time = {}
+start_time = {}
+i = 0
+for s in srcs.keys():
+    stop_time[s] = sess_start_time + float(i+1) * time_per_src / 24.0
+    start_time[s] = sess_start_time + float(i) * time_per_src / 24.0
+    i += 1
+    print "  Src '%s' start:%s, stop:%s" % (s, start_time[s], stop_time[s])
+
+# Config items common to all obs
+config_common = """
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+"""
+
+# Config items common to L-band obs
+config_Lband_common="""
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to 820 obs
+config_820_common="""
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+vegas.numchan = 128
+vegas.polnmode = 'full_stokes'
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to S-band obs
+config_Sband_common="""
+receiver = 'Rcvr2_3'
+restfreq = 2000.0
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config for cal mode
+config_cal = """
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+"""
+
+# Config for psr fold mode.
+# Note the '%s' for parfile that needs to be filled in when using this.
+config_psr = """
+vegas.obsmode = 'coherent_fold'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+vegas.fold_parfile = '%s'
+swmode = 'tp_nocal'
+noisecal = 'off'
+"""
+
+# Check observing band
+if (band == '820'):
+   config_common = config_common.replace("VEGAS/GUPPI","GUPPI")
+   config_common = config_common.replace("vegas","guppi")
+   config_820_common = config_820_common.replace("vegas.scale = 1015","")
+   config_820_common = config_820_common.replace("vegas","guppi")
+   config0 = config_common + config_820_common
+   config_cal = config_cal.replace("vegas","guppi")
+   config_psr = config_psr.replace("vegas","guppi")
+elif (band== 'L'):
+   config0 = config_common + config_Lband_common
+elif (band=='S'):
+   config0 = config_common + config_Sband_common
+else:
+    Break("Invalid band ('%s') selected!" % band)
+
+# Figure out what source to start on
+#if start_src == None:
+start_src = None
+
+if True:
+    cur_time = Now()
+    for s in srcs.keys():
+        if (cur_time < stop_time[s]):
+            start_src = s
+            break
+
+# Initial slew, config, balance
+print config0
+print "First source: %s" % start_src
+Configure(config0 + config_cal)
+SetValues("DCR",{"state":"prepare"})
+Slew(start_src)
+Balance()
+if (band!='820'):
+    Balance("VEGAS")
+# Note: use these for 820 recvr 2013/05/19
+#Balance("IFRack")
+#Balance("GUPPI")
+Break("Check GUPPI levels now.")
+
+# 2013/06/06 - route to vegas bank A for Glenn's stuff
+#SetValues("ConverterRack",{"CMInput,1":"A"})
+#SetValues("ConverterRack",{"CMInput,5":"A"})
+#if (band=='820'):
+#    SetValues("ConverterRack",{"Gfrequency,1":11068})
+#elif (band=='L'):
+#    #SetValues("ConverterRack",{"Gfrequency,1":13088})
+#    SetValues("ConverterRack",{"Gfrequency,1":13288})
+#SetValues("ConverterRack",{"CMAttenuator1":22.0})
+#SetValues("ConverterRack",{"CMAttenuator5":22.0})
+#SetValues("ConverterRack",{"CMOutput,1":3})
+#SetValues("ConverterRack",{"CMOutput,5":3})
+#SetValues("ConverterRack",{"state":"prepare"})
+
+# Main observing loop
+first=1
+for s in srcs.keys():
+    if (first and s!=start_src):
+        continue
+    first=0;
+    print "Starting '%s'" % s
+    alias = "%4.4d" % srcs[s]["alias"]
+    parfile = "/users/pdemores/tzpar/%s.par" % s
+    print parfile
+    Slew(s)
+    print "############## HERE ##################"
+    print config0+config_cal
+    Configure(config0 + config_cal)
+    SetValues("DCR",{"state":"prepare"})
+    Balance("IFRack")
+    # Regular PSR observing
+    Track(s, None, 90.0) # Cal scan
+    Configure(config0 + config_psr % parfile)
+    Track(s, None, stopTime=stop_time[s])
+
+#######################################################
+ LOG SESSION NUMBER 1 
+[05:31:37] ******** Begin Scheduling Block
+[05:31:37] ******** observer = Scott Ransom, SB name = nanograv_timing_vegas, project ID = AGBT18B_226, date = 31 May 2019
+
+[05:31:37] Using current time for session start
+[05:31:37] Session time remaining = 3.0h
+[05:31:37] nsrc = 6
+[05:31:37] time_per_src = 29.7 min
+[05:31:37]   Src 'J1747-4036' start:2019-05-31 05:31:37.82, stop:2019-05-31 06:01:21.51
+[05:31:37]   Src 'J1909-3744' start:2019-05-31 06:01:21.51, stop:2019-05-31 06:31:05.21
+[05:31:37]   Src 'J2010-1323' start:2019-05-31 06:31:05.21, stop:2019-05-31 07:00:48.91
+[05:31:37]   Src 'J2145-0750' start:2019-05-31 07:00:48.91, stop:2019-05-31 07:30:32.61
+[05:31:37]   Src 'J2150-0326' start:2019-05-31 07:30:32.61, stop:2019-05-31 08:00:16.30
+[05:31:37]   Src 'J0740+6620' start:2019-05-31 08:00:16.30, stop:2019-05-31 08:30:00.00
+[05:31:37] 
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+guppi.obstype = 'fold'
+guppi.polnmode = 'full_stokes'
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+guppi.numchan = 128
+guppi.polnmode = 'full_stokes'
+
+guppi.scale = 0.125
+
+[05:31:37] First source: J1747-4036
+[05:31:38] Configuring telescope.
+[05:31:38]     Setting State: Activating
+[05:32:07]     Setting State: Ready
+[05:32:09]     Setting State: Activating
+[05:32:10]     Setting State: Ready
+[05:32:10] Default values are
+[05:32:10] nchan  =  128
+[05:32:10] beam  =  B1
+[05:32:10] dm  =  0
+[05:32:10] if3freq  =  [0]
+[05:32:10] Configuring for backend GUPPI...
+[05:32:10] The bad devices are: 
+[05:32:10] ConverterFilter14
+[05:32:10] ConverterFilter2
+[05:32:10] ConverterFilter16
+[05:32:10] ConverterFilter10
+[05:32:10] ConverterFilter12
+[05:32:10] Waiting for  ConverterRack to finish activating
+[05:32:10] . . Waiting for  GUPPI to finish activating
+[05:32:10] . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[05:32:10] Checking telescope
+[05:32:10] Configuration Complete
+[05:32:10] source : J1747-4036
+               alias : 1747.0
+               jname : J1747-4036
+               location : J2000 @ (17:47:48.72, -40:36:54.80)
+[05:32:11] Slewing to source.
+[05:32:11] In state Ready, waiting for state Activating
+     Setting State: Activating
+[05:32:11] Detected state Activating
+[05:32:11] In state Activating, waiting for state Ready
+[05:33:08]     Setting State: Ready
+[05:33:08] Detected state Ready
+[05:33:08] Balancing IF system.
+[05:33:08] Balancing PF
+[05:33:09]     Setting State: Activating
+[05:33:09]     Setting State: Ready
+[05:33:09]     Setting State: Activating
+[05:33:10]     Setting State: Ready
+[05:33:11]     Setting State: Activating
+[05:33:12]     Setting State: Ready
+[05:33:13]     Setting State: Activating
+[05:33:13] Balancing IFRack
+[05:33:15]     Setting State: Ready
+[05:33:16] the sampler values are:
+[05:33:16] RF_power 1 : 0.9814453
+[05:33:16] RF_power 2 : 0.009765625
+[05:33:16] RF_power 3 : 0.9228516
+[05:33:16] RF_power 4 : 0.009765625
+[05:33:16] RF_power 5 : 0.01953125
+[05:33:16] RF_power 6 : 0.04394531
+[05:33:16] RF_power 7 : 0
+[05:33:16] RF_power 8 : 0.0390625
+[05:33:16] Balancing Guppi
+[05:33:16]     Setting State: Activating
+[05:33:16]     Setting State: Ready
+[05:33:16]     Setting State: Activating
+[05:33:16]     Setting State: Ready
+[05:33:16]     Setting State: Activating
+[05:33:16]     Setting State: Ready
+[05:33:18] Filter 8 RF power =
+[05:33:18] 2.79296875
+[05:33:18] Filter 4 RF power =
+[05:33:18] 1.8115234375
+[05:33:18]     Setting State: Activating
+[05:33:18]     Setting State: Ready
+[05:33:18]     Setting State: Activating
+[05:33:18]     Setting State: Ready
+[05:33:18] 
+[05:33:18] User queried: "Check GUPPI levels now. - Continue scheduling block?" waiting for reply...
+[05:33:50] User replied: "Yes".
+[05:33:50] Starting 'J1747-4036'
+[05:33:50] /users/pdemores/tzpar/J1747-4036.par
+[05:33:50] source : J1747-4036
+               alias : 1747.0
+               jname : J1747-4036
+               location : J2000 @ (17:47:48.72, -40:36:54.80)
+[05:33:50] Slewing to source.
+[05:33:51] In state Ready, waiting for state Activating
+     Setting State: Activating
+[05:33:51] Detected state Activating
+[05:33:51] In state Activating, waiting for state Ready
+[05:33:53]     Setting State: Ready
+[05:33:53] Detected state Ready
+[05:33:53] ############## HERE ##################
+[05:33:53] 
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+guppi.obstype = 'fold'
+guppi.polnmode = 'full_stokes'
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+guppi.numchan = 128
+guppi.polnmode = 'full_stokes'
+
+guppi.scale = 0.125
+
+guppi.obsmode = 'coherent_cal'
+guppi.fold_dumptime = 10.0
+guppi.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[05:33:53] Configuring telescope.
+[05:33:53]     Setting State: Activating
+[05:34:22]     Setting State: Ready
+[05:34:23]     Setting State: Activating
+[05:34:24]     Setting State: Ready
+[05:34:25] Default values are
+[05:34:25] nchan  =  128
+[05:34:25] beam  =  B1
+[05:34:25] dm  =  0
+[05:34:25] if3freq  =  [0]
+[05:34:25] Configuring for backend GUPPI...
+[05:34:25] The bad devices are: 
+[05:34:25] ConverterFilter14
+[05:34:25] ConverterFilter2
+[05:34:25] ConverterFilter16
+[05:34:25] ConverterFilter10
+[05:34:25] ConverterFilter12
+[05:34:25] Waiting for  GUPPI to finish activating
+[05:34:25] . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[05:34:25] Checking telescope
+[05:34:25] Configuration Complete
+[05:34:25] Balancing IF system.
+[05:34:25] Balancing IFRack
+[05:34:25]     Setting State: Activating
+[05:34:27]     Setting State: Ready
+[05:34:27] the sampler values are:
+[05:34:27] RF_power 1 : 1.015625
+[05:34:27] RF_power 2 : 0.009765625
+[05:34:27] RF_power 3 : 0.8789062
+[05:34:27] RF_power 4 : 0.009765625
+[05:34:27] RF_power 5 : 0.01953125
+[05:34:27] RF_power 6 : 0.0390625
+[05:34:27] RF_power 7 : 0
+[05:34:27] RF_power 8 : 0.04394531
+[05:34:28] source : J1747-4036
+               alias : 1747.0
+               jname : J1747-4036
+               location : J2000 @ (17:47:48.72, -40:36:54.80)
+[05:34:28] Track: Subscan 1 of 1
+[05:34:29] In state Ready, waiting for state Running
+[05:34:29]     Setting State: Activating
+[05:34:56]     Setting State: Committed
+[05:34:59]     Setting State: Running
+[05:34:59] Detected state Running
+[05:34:59] *** Notice: This subscan will be numbered as scan #1 in your data reduction package.
+[05:34:59] In state Running, waiting for state Ready
+[05:36:28]     Setting State: Stopping
+[05:36:36]     Setting State: Ready
+[05:36:36] Detected state Ready
+[05:36:36] Ygor Telescope: WaitForStopping
+[05:36:37] Configuring telescope.
+[05:36:37]     Setting State: Activating
+[05:37:06]     Setting State: Ready
+[05:37:08]     Setting State: Activating
+[05:37:09]     Setting State: Ready
+[05:37:09] Default values are
+[05:37:09] nchan  =  128
+[05:37:09] beam  =  B1
+[05:37:09] dm  =  0
+[05:37:09] if3freq  =  [0]
+[05:37:09] Configuring for backend GUPPI...
+[05:37:09] The bad devices are: 
+[05:37:09] ConverterFilter14
+[05:37:09] ConverterFilter2
+[05:37:09] ConverterFilter16
+[05:37:09] ConverterFilter10
+[05:37:09] ConverterFilter12
+[05:37:09] Waiting for  GUPPI to finish activating
+[05:37:09] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[05:37:09] Checking telescope
+[05:37:09] Configuration Complete
+[05:37:09] source : J1747-4036
+               alias : 1747.0
+               jname : J1747-4036
+               location : J2000 @ (17:47:48.72, -40:36:54.80)
+[05:37:10] Track: Subscan 1 of 1
+[05:37:10] In state Ready, waiting for state Running
+[05:37:10]     Setting State: Activating
+[05:37:16]     Setting State: Committed
+[05:37:18]     Setting State: Running
+[05:37:18] Detected state Running
+[05:37:18] *** Notice: This subscan will be numbered as scan #2 in your data reduction package.
+[05:37:18] In state Running, waiting for state Ready
+[06:01:21]     Setting State: Stopping
+[06:01:25]     Setting State: Ready
+[06:01:25] Detected state Ready
+[06:01:25] Ygor Telescope: WaitForStopping
+[06:01:25] Starting 'J1909-3744'
+[06:01:25] /users/pdemores/tzpar/J1909-3744.par
+[06:01:25] source : J1909-3744
+               alias : 1909.0
+               jname : J1909-3744
+               location : J2000 @ (19:09:47.43, -37:44:14.30)
+[06:01:26] Slewing to source.
+[06:01:28] In state Ready, waiting for state Activating
+[06:01:28]     Setting State: Activating
+[06:01:28] Detected state Activating
+[06:01:28] In state Activating, waiting for state Ready
+[06:02:20]     Setting State: Ready
+[06:02:20] Detected state Ready
+[06:02:20] ############## HERE ##################
+[06:02:20] 
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+guppi.obstype = 'fold'
+guppi.polnmode = 'full_stokes'
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+guppi.numchan = 128
+guppi.polnmode = 'full_stokes'
+
+guppi.scale = 0.125
+
+guppi.obsmode = 'coherent_cal'
+guppi.fold_dumptime = 10.0
+guppi.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[06:02:21] Configuring telescope.
+[06:02:21]     Setting State: Activating
+[06:02:50]     Setting State: Ready
+[06:02:52]     Setting State: Activating
+[06:02:53]     Setting State: Ready
+[06:02:53] Default values are
+[06:02:53] nchan  =  128
+[06:02:53] beam  =  B1
+[06:02:53] dm  =  0
+[06:02:53] if3freq  =  [0]
+[06:02:53] Configuring for backend GUPPI...
+[06:02:53] The bad devices are: 
+[06:02:53] ConverterFilter14
+[06:02:53] ConverterFilter2
+[06:02:53] ConverterFilter16
+[06:02:53] ConverterFilter10
+[06:02:53] ConverterFilter12
+[06:02:53] Waiting for  GUPPI to finish activating
+[06:02:53] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[06:02:53] Checking telescope
+[06:02:53] Configuration Complete
+[06:02:54] Balancing IF system.
+[06:02:54] Balancing IFRack
+[06:02:54]     Setting State: Activating
+[06:02:56] the sampler values are:
+[06:02:56] RF_power 1 : 0.8544922
+[06:02:56] RF_power 2 : 0.009765625
+[06:02:56] RF_power 3 : 0.7861328
+[06:02:56] RF_power 4 : 0.01464844
+[06:02:56] RF_power 5 : 0.02441406
+[06:02:56] RF_power 6 : 0.04394531
+[06:02:56] RF_power 7 : 0
+[06:02:56] RF_power 8 : 0.04394531
+[06:02:56]     Setting State: Ready
+[06:02:57] source : J1909-3744
+               alias : 1909.0
+               jname : J1909-3744
+               location : J2000 @ (19:09:47.43, -37:44:14.30)
+[06:02:57] Track: Subscan 1 of 1
+[06:02:58] In state Ready, waiting for state Running
+[06:02:58]     Setting State: Activating
+[06:03:25]     Setting State: Committed
+[06:03:27]     Setting State: Running
+[06:03:27] Detected state Running
+[06:03:27] *** Notice: This subscan will be numbered as scan #3 in your data reduction package.
+[06:03:27] In state Running, waiting for state Ready
+[06:04:57]     Setting State: Stopping
+[06:05:05]     Setting State: Ready
+[06:05:05] Detected state Ready
+[06:05:05] Ygor Telescope: WaitForStopping
+[06:05:05] Configuring telescope.
+[06:05:06]     Setting State: Activating
+[06:05:36]     Setting State: Ready
+[06:05:37]     Setting State: Activating
+[06:05:38]     Setting State: Ready
+[06:05:38] Default values are
+[06:05:38] nchan  =  128
+[06:05:38] beam  =  B1
+[06:05:38] dm  =  0
+[06:05:38] if3freq  =  [0]
+[06:05:38] Configuring for backend GUPPI...
+[06:05:38] The bad devices are: 
+[06:05:38] ConverterFilter14
+[06:05:38] ConverterFilter2
+[06:05:38] ConverterFilter16
+[06:05:38] ConverterFilter10
+[06:05:38] ConverterFilter12
+[06:05:38] Waiting for  GUPPI to finish activating
+[06:05:38] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[06:05:38] Checking telescope
+[06:05:38] Configuration Complete
+[06:05:38] source : J1909-3744
+               alias : 1909.0
+               jname : J1909-3744
+               location : J2000 @ (19:09:47.43, -37:44:14.30)
+[06:05:39] Track: Subscan 1 of 1
+[06:05:39] In state Ready, waiting for state Running
+[06:05:40]     Setting State: Activating
+[06:05:46]     Setting State: Committed
+[06:05:48]     Setting State: Running
+[06:05:48] Detected state Running
+[06:05:48] *** Notice: This subscan will be numbered as scan #4 in your data reduction package.
+[06:05:48] In state Running, waiting for state Ready
+[06:31:05]     Setting State: Stopping
+[06:31:13]     Setting State: Ready
+[06:31:13] Detected state Ready
+[06:31:13] Ygor Telescope: WaitForStopping
+[06:31:13] Starting 'J2010-1323'
+[06:31:13] /users/pdemores/tzpar/J2010-1323.par
+[06:31:13] source : J2010-1323
+               alias : 2010.0
+               jname : J2010-1323
+               location : J2000 @ (20:10:45.91, -13:23:56.00)
+[06:31:14] Slewing to source.
+[06:31:14] In state Ready, waiting for state Activating
+[06:31:14]     Setting State: Activating
+[06:31:14] Detected state Activating
+[06:31:14] In state Activating, waiting for state Ready
+[06:32:23]     Setting State: Ready
+[06:32:23] Detected state Ready
+[06:32:23] ############## HERE ##################
+[06:32:23] 
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+guppi.obstype = 'fold'
+guppi.polnmode = 'full_stokes'
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+guppi.numchan = 128
+guppi.polnmode = 'full_stokes'
+
+guppi.scale = 0.125
+
+guppi.obsmode = 'coherent_cal'
+guppi.fold_dumptime = 10.0
+guppi.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[06:32:23] Configuring telescope.
+[06:32:23]     Setting State: Activating
+[06:32:52]     Setting State: Ready
+[06:32:53]     Setting State: Activating
+[06:32:54]     Setting State: Ready
+[06:32:54] Default values are
+[06:32:54] nchan  =  128
+[06:32:54] beam  =  B1
+[06:32:54] dm  =  0
+[06:32:54] if3freq  =  [0]
+[06:32:54] Configuring for backend GUPPI...
+[06:32:54] The bad devices are: 
+[06:32:54] ConverterFilter14
+[06:32:54] ConverterFilter2
+[06:32:54] ConverterFilter16
+[06:32:54] ConverterFilter10
+[06:32:54] ConverterFilter12
+[06:32:54] Waiting for  GUPPI to finish activating
+[06:32:54] . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[06:32:54] Checking telescope
+[06:32:54] Configuration Complete
+[06:32:55] Balancing IF system.
+[06:32:55] Balancing IFRack
+[06:32:56]     Setting State: Activating
+[06:32:57]     Setting State: Ready
+[06:32:57] the sampler values are:
+[06:32:57] RF_power 1 : 0.8154297
+[06:32:57] RF_power 2 : 0.009765625
+[06:32:57] RF_power 3 : 0.8642578
+[06:32:57] RF_power 4 : 0.009765625
+[06:32:57] RF_power 5 : 0.01953125
+[06:32:57] RF_power 6 : 0.04394531
+[06:32:57] RF_power 7 : 0
+[06:32:57] RF_power 8 : 0.04882812
+[06:32:58] source : J2010-1323
+               alias : 2010.0
+               jname : J2010-1323
+               location : J2000 @ (20:10:45.91, -13:23:56.00)
+[06:32:58] Track: Subscan 1 of 1
+[06:32:59] In state Ready, waiting for state Running
+[06:32:59]     Setting State: Activating
+[06:33:26]     Setting State: Committed
+[06:33:28]     Setting State: Running
+[06:33:28] Detected state Running
+[06:33:28] *** Notice: This subscan will be numbered as scan #5 in your data reduction package.
+[06:33:28] In state Running, waiting for state Ready
+[06:34:58]     Setting State: Stopping
+[06:35:06]     Setting State: Ready
+[06:35:06] Detected state Ready
+[06:35:06] Ygor Telescope: WaitForStopping
+[06:35:07] Configuring telescope.
+[06:35:07]     Setting State: Activating
+[06:35:36]     Setting State: Ready
+[06:35:37]     Setting State: Activating
+[06:35:38]     Setting State: Ready
+[06:35:38] Default values are
+[06:35:38] nchan  =  128
+[06:35:38] beam  =  B1
+[06:35:38] dm  =  0
+[06:35:38] if3freq  =  [0]
+[06:35:38] Configuring for backend GUPPI...
+[06:35:38] The bad devices are: 
+[06:35:38] ConverterFilter14
+[06:35:38] ConverterFilter2
+[06:35:38] ConverterFilter16
+[06:35:38] ConverterFilter10
+[06:35:38] ConverterFilter12
+[06:35:38] Waiting for  GUPPI to finish activating
+[06:35:38] . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[06:35:38] Checking telescope
+[06:35:38] Configuration Complete
+[06:35:39] source : J2010-1323
+               alias : 2010.0
+               jname : J2010-1323
+               location : J2000 @ (20:10:45.91, -13:23:56.00)
+[06:35:39] Track: Subscan 1 of 1
+[06:35:39] In state Ready, waiting for state Running
+[06:35:39]     Setting State: Activating
+[06:35:45]     Setting State: Committed
+[06:35:47]     Setting State: Running
+[06:35:47] Detected state Running
+[06:35:47] *** Notice: This subscan will be numbered as scan #6 in your data reduction package.
+[06:35:47] In state Running, waiting for state Ready
+[07:00:48]     Setting State: Stopping
+[07:01:02]     Setting State: Ready
+[07:01:02] Detected state Ready
+[07:01:02] Ygor Telescope: WaitForStopping
+[07:01:02] Starting 'J2145-0750'
+[07:01:02] /users/pdemores/tzpar/J2145-0750.par
+[07:01:02] source : J2145-0750
+               alias : 2145.0
+               jname : J2145-0750
+               location : J2000 @ (21:45:50.46, -07:50:18.30)
+[07:01:03] Slewing to source.
+[07:01:03] In state Ready, waiting for state Activating
+[07:01:03]     Setting State: Activating
+[07:01:03] Detected state Activating
+[07:01:03] In state Activating, waiting for state Ready
+[07:02:10]     Setting State: Ready
+[07:02:10] Detected state Ready
+[07:02:10] ############## HERE ##################
+[07:02:10] 
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+guppi.obstype = 'fold'
+guppi.polnmode = 'full_stokes'
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+guppi.numchan = 128
+guppi.polnmode = 'full_stokes'
+
+guppi.scale = 0.125
+
+guppi.obsmode = 'coherent_cal'
+guppi.fold_dumptime = 10.0
+guppi.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[07:02:10] Configuring telescope.
+[07:02:10]     Setting State: Activating
+[07:02:40]     Setting State: Ready
+[07:02:42]     Setting State: Activating
+[07:02:43]     Setting State: Ready
+[07:02:43] Default values are
+[07:02:43] nchan  =  128
+[07:02:43] beam  =  B1
+[07:02:43] dm  =  0
+[07:02:43] if3freq  =  [0]
+[07:02:43] Configuring for backend GUPPI...
+[07:02:43] The bad devices are: 
+[07:02:43] ConverterFilter14
+[07:02:43] ConverterFilter2
+[07:02:43] ConverterFilter16
+[07:02:43] ConverterFilter10
+[07:02:43] ConverterFilter12
+[07:02:43] Waiting for  GUPPI to finish activating
+[07:02:43] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[07:02:43] Checking telescope
+[07:02:43] Configuration Complete
+[07:02:43] Balancing IF system.
+[07:02:43] Balancing IFRack
+[07:02:43]     Setting State: Activating
+[07:02:45]     Setting State: Ready
+[07:02:45] the sampler values are:
+[07:02:45] RF_power 1 : 0.9521484
+[07:02:45] RF_power 2 : 0.004882812
+[07:02:45] RF_power 3 : 0.9277344
+[07:02:45] RF_power 4 : 0.009765625
+[07:02:45] RF_power 5 : 0.01953125
+[07:02:45] RF_power 6 : 0.04394531
+[07:02:45] RF_power 7 : 0
+[07:02:45] RF_power 8 : 0.04394531
+[07:02:46] source : J2145-0750
+               alias : 2145.0
+               jname : J2145-0750
+               location : J2000 @ (21:45:50.46, -07:50:18.30)
+[07:02:46] Track: Subscan 1 of 1
+[07:02:47] In state Ready, waiting for state Running
+[07:02:47]     Setting State: Activating
+[07:03:13]     Setting State: Committed
+[07:03:15]     Setting State: Running
+[07:03:15] Detected state Running
+[07:03:15] *** Notice: This subscan will be numbered as scan #7 in your data reduction package.
+[07:03:15] In state Running, waiting for state Ready
+[07:04:45]     Setting State: Stopping
+[07:04:52]     Setting State: Ready
+[07:04:52] Detected state Ready
+[07:04:52] Ygor Telescope: WaitForStopping
+[07:04:52] Configuring telescope.
+[07:04:53]     Setting State: Activating
+[07:05:23]     Setting State: Ready
+[07:05:24]     Setting State: Activating
+[07:05:25]     Setting State: Ready
+[07:05:25] Default values are
+[07:05:25] nchan  =  128
+[07:05:25] beam  =  B1
+[07:05:25] dm  =  0
+[07:05:25] if3freq  =  [0]
+[07:05:25] Configuring for backend GUPPI...
+[07:05:25] The bad devices are: 
+[07:05:25] ConverterFilter14
+[07:05:25] ConverterFilter2
+[07:05:25] ConverterFilter16
+[07:05:25] ConverterFilter10
+[07:05:25] ConverterFilter12
+[07:05:25] Waiting for  GUPPI to finish activating
+[07:05:25] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[07:05:25] Checking telescope
+[07:05:25] Configuration Complete
+[07:05:25] source : J2145-0750
+               alias : 2145.0
+               jname : J2145-0750
+               location : J2000 @ (21:45:50.46, -07:50:18.30)
+[07:05:26] Track: Subscan 1 of 1
+[07:05:26] In state Ready, waiting for state Running
+[07:05:26]     Setting State: Activating
+[07:05:32]     Setting State: Committed
+[07:05:34]     Setting State: Running
+[07:05:34] Detected state Running
+[07:05:34] *** Notice: This subscan will be numbered as scan #8 in your data reduction package.
+[07:05:34] In state Running, waiting for state Ready
+[07:30:32]     Setting State: Stopping
+[07:30:40]     Setting State: Ready
+[07:30:40] Detected state Ready
+[07:30:40] Ygor Telescope: WaitForStopping
+[07:30:40] Starting 'J2150-0326'
+[07:30:40] /users/pdemores/tzpar/J2150-0326.par
+[07:30:40] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[07:30:40] Slewing to source.
+[07:30:41] In state Ready, waiting for state Activating     Setting State: Activating
+
+[07:30:41] Detected state Activating
+[07:30:41] In state Activating, waiting for state Ready
+[07:31:08]     Setting State: Ready
+[07:31:08] Detected state Ready
+[07:31:08] ############## HERE ##################
+[07:31:08] 
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+guppi.obstype = 'fold'
+guppi.polnmode = 'full_stokes'
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+guppi.numchan = 128
+guppi.polnmode = 'full_stokes'
+
+guppi.scale = 0.125
+
+guppi.obsmode = 'coherent_cal'
+guppi.fold_dumptime = 10.0
+guppi.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[07:31:08] Configuring telescope.
+[07:31:08]     Setting State: Activating
+[07:31:37]     Setting State: Ready
+[07:31:39]     Setting State: Activating
+[07:31:40]     Setting State: Ready
+[07:31:40] Default values are
+[07:31:40] nchan  =  128
+[07:31:40] beam  =  B1
+[07:31:40] dm  =  0
+[07:31:40] if3freq  =  [0]
+[07:31:40] Configuring for backend GUPPI...
+[07:31:40] The bad devices are: 
+[07:31:40] ConverterFilter14
+[07:31:40] ConverterFilter2
+[07:31:40] ConverterFilter16
+[07:31:40] ConverterFilter10
+[07:31:40] ConverterFilter12
+[07:31:40] Waiting for  GUPPI to finish activating
+[07:31:40] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[07:31:40] Checking telescope
+[07:31:40] Configuration Complete
+[07:31:41] Balancing IF system.
+[07:31:41] Balancing IFRack
+[07:31:41]     Setting State: Activating
+[07:31:43]     Setting State: Ready
+[07:31:43] the sampler values are:
+[07:31:43] RF_power 1 : 0.9814453
+[07:31:43] RF_power 2 : 0.009765625
+[07:31:43] RF_power 3 : 0.9179688
+[07:31:43] RF_power 4 : 0.01464844
+[07:31:43] RF_power 5 : 0.02441406
+[07:31:43] RF_power 6 : 0.04394531
+[07:31:43] RF_power 7 : 0
+[07:31:43] RF_power 8 : 0.0390625
+[07:31:44] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[07:31:44] Track: Subscan 1 of 1
+[07:31:45] In state Ready, waiting for state Running
+[07:31:45]     Setting State: Activating
+[07:32:11]     Setting State: Committed
+[07:32:13]     Setting State: Running
+[07:32:13] Detected state Running
+[07:32:13] *** Notice: This subscan will be numbered as scan #9 in your data reduction package.
+[07:32:13] In state Running, waiting for state Ready
+[07:33:43]     Setting State: Stopping
+[07:33:51]     Setting State: Ready
+[07:33:51] Detected state Ready
+[07:33:51] Ygor Telescope: WaitForStopping
+[07:33:52] Configuring telescope.
+[07:33:52]     Setting State: Activating
+[07:34:22]     Setting State: Ready
+[07:34:23]     Setting State: Activating
+[07:34:24]     Setting State: Ready
+[07:34:24] Default values are
+[07:34:24] nchan  =  128
+[07:34:24] beam  =  B1
+[07:34:24] dm  =  0
+[07:34:24] if3freq  =  [0]
+[07:34:24] Configuring for backend GUPPI...
+[07:34:24] The bad devices are: 
+[07:34:24] ConverterFilter14
+[07:34:24] ConverterFilter2
+[07:34:24] ConverterFilter16
+[07:34:24] ConverterFilter10
+[07:34:24] ConverterFilter12
+[07:34:24] Waiting for  GUPPI to finish activating
+[07:34:24] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[07:34:24] Checking telescope
+[07:34:24] Configuration Complete
+[07:34:24] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[07:34:25] Track: Subscan 1 of 1
+[07:34:25] In state Ready, waiting for state Running
+[07:34:25]     Setting State: Activating
+[07:34:31]     Setting State: Committed
+[07:34:33]     Setting State: Running
+[07:34:33] Detected state Running
+[07:34:33] *** Notice: This subscan will be numbered as scan #10 in your data reduction package.
+[07:34:33] In state Running, waiting for state Ready
+[08:00:16]     Setting State: Stopping
+[08:00:25]     Setting State: Ready
+[08:00:25] Detected state Ready
+[08:00:25] Ygor Telescope: WaitForStopping
+[08:00:25] Starting 'J0740+6620'
+[08:00:25] /users/pdemores/tzpar/J0740+6620.par
+[08:00:25] source : J0740+6620
+               alias : 740.0
+               jname : J0740+6620
+               location : J2000 @ (07:40:45.80, 66:20:33.60)
+[08:00:25] Slewing to source.
+[08:00:25] In state Ready, waiting for state Activating
+[08:00:25]     Setting State: Activating
+[08:00:25] Detected state Activating
+[08:00:25] In state Activating, waiting for state Ready
+[08:04:31]     Setting State: Ready
+[08:04:31] Detected state Ready
+[08:04:31] ############## HERE ##################
+[08:04:31] 
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+guppi.obstype = 'fold'
+guppi.polnmode = 'full_stokes'
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+guppi.numchan = 128
+guppi.polnmode = 'full_stokes'
+
+guppi.scale = 0.125
+
+guppi.obsmode = 'coherent_cal'
+guppi.fold_dumptime = 10.0
+guppi.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[08:04:31] Configuring telescope.
+[08:04:32]     Setting State: Activating
+[08:05:00]     Setting State: Ready
+[08:05:02]     Setting State: Activating
+[08:05:03]     Setting State: Ready
+[08:05:03] Default values are
+[08:05:03] nchan  =  128
+[08:05:03] beam  =  B1
+[08:05:03] dm  =  0
+[08:05:03] if3freq  =  [0]
+[08:05:03] Configuring for backend GUPPI...
+[08:05:03] The bad devices are: 
+[08:05:03] ConverterFilter14
+[08:05:03] ConverterFilter2
+[08:05:03] ConverterFilter16
+[08:05:03] ConverterFilter10
+[08:05:03] ConverterFilter12
+[08:05:03] Waiting for  ConverterRack to finish activating
+[08:05:03] . . . Waiting for  GUPPI to finish activating
+[08:05:03] . . . . . . . . . . . . . . . . . . . . . . . . . .
+[08:05:03] Checking telescope
+[08:05:03] Configuration Complete
+[08:05:04] Balancing IF system.
+[08:05:04] Balancing IFRack
+[08:05:04]     Setting State: Activating
+[08:05:05]     Setting State: Ready
+[08:05:06] the sampler values are:
+[08:05:06] RF_power 1 : 1.074219
+[08:05:06] RF_power 2 : 0.01464844
+[08:05:06] RF_power 3 : 0.9863281
+[08:05:06] RF_power 4 : 0.009765625
+[08:05:06] RF_power 5 : 0.02441406
+[08:05:06] RF_power 6 : 0.0390625
+[08:05:06] RF_power 7 : 0
+[08:05:06] RF_power 8 : 0.0390625
+[08:05:07] source : J0740+6620
+               alias : 740.0
+               jname : J0740+6620
+               location : J2000 @ (07:40:45.80, 66:20:33.60)
+[08:05:07] Track: Subscan 1 of 1
+[08:05:08] In state Ready, waiting for state Running
+[08:05:08]     Setting State: Activating
+[08:05:33]     Setting State: Committed
+[08:05:35]     Setting State: Running
+[08:05:35] Detected state Running
+[08:05:35] *** Notice: This subscan will be numbered as scan #11 in your data reduction package.
+[08:05:35] In state Running, waiting for state Ready
+[08:07:05]     Setting State: Stopping
+[08:07:13]     Setting State: Ready
+[08:07:13] Detected state Ready
+[08:07:13] Ygor Telescope: WaitForStopping
+[08:07:13] Configuring telescope.
+[08:07:14]     Setting State: Activating
+[08:07:43]     Setting State: Ready
+[08:07:45]     Setting State: Activating
+[08:07:46]     Setting State: Ready
+[08:07:46] Default values are
+[08:07:46] nchan  =  128
+[08:07:46] beam  =  B1
+[08:07:46] dm  =  0
+[08:07:46] if3freq  =  [0]
+[08:07:46] Configuring for backend GUPPI...
+[08:07:46] The bad devices are: 
+[08:07:46] ConverterFilter14
+[08:07:46] ConverterFilter2
+[08:07:46] ConverterFilter16
+[08:07:46] ConverterFilter10
+[08:07:46] ConverterFilter12
+[08:07:46] Waiting for  GUPPI to finish activating
+[08:07:46] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[08:07:46] Checking telescope
+[08:07:46] Configuration Complete
+[08:07:46] source : J0740+6620
+               alias : 740.0
+               jname : J0740+6620
+               location : J2000 @ (07:40:45.80, 66:20:33.60)
+[08:07:47] Track: Subscan 1 of 1
+[08:07:47] In state Ready, waiting for state Running
+[08:07:47]     Setting State: Activating
+[08:07:53]     Setting State: Committed
+[08:07:55]     Setting State: Running
+[08:07:55] Detected state Running
+[08:07:55] *** Notice: This subscan will be numbered as scan #12 in your data reduction package.
+[08:07:55] In state Running, waiting for state Ready
+[08:30:00]     Setting State: Stopping
+[08:30:08]     Setting State: Ready
+[08:30:08] Detected state Ready
+[08:30:08] Ygor Telescope: WaitForStopping
+runSuccessful: True
+[08:30:08] ******** End Scheduling Block
+[08:30:08] ******** observer = Scott Ransom, SB name = nanograv_timing_vegas, project ID = AGBT18B_226
+
+how much log? 30809 id: 231097self.history: <gbt.turtle.database.History.History instance at 0x604bfc8>self.history.connection: <gbt.turtle.database.TurtleConnection.TurtleConnection instance at 0x604be60>how much converted log? 31228 
+#######################################################

@@ -1,0 +1,3170 @@
+ 
+ 
+#######################################################
+ SCRIPT NUMBER 1, project:AGBT18B_226_143 
+ 233570 685 Thankful Cromartie 13 Tyler Hise 2019-09-01 00:30:50 obs_aborted 
+#######################################################
+# NANOGrav timing astrid block, 2012/02 PBD
+# Modified for GUPPI + VEGAS, 2018/03 KS
+
+# IMPORTANT!  Edit this to pick which band you're observing#
+#band = '820'
+band = 'L'
+#band = 'S'
+
+# IMPORTANT!  Edit this to pick which session you're observing
+# All sources in the catalog will be observed in order, with the 
+# remaining session time divided evenly between them. To 
+# restart a interrupted session, first edit the catalog and comment
+# out sources that have already been observed today.
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_A.cat")
+srcs = Catalog("/users/pdemores/sched/18B226_2018_session_B.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_C.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_D.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_E.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_F.cat")
+#Use personal catalog file, rather than editing Paul's files:
+#srcs = Catalog("/users/amcewen/18B226_2018_session_F.cat")
+
+# IMPORTANT!  Edit here to set the session's start/stop times in UTC!
+# NOTES:
+#  - start time does not need to be edited if the script is stopped/restarted.
+#    it will always use the current time when running 'for real'.
+#  - don't use any leading 0's in the values here, (leading 0 is code for
+#    octal).
+from mx import DateTime
+# Function args are year, month, day, hour (24 hr), min, sec (UTC)
+sess_start_time = DateTime.DateTime(2019,9,1,00,30,0) # UTC
+sess_stop_time = DateTime.DateTime(2019,9,1,03,30,0) # UTC
+
+# Use fixed start time rather than current time.
+fix = False
+
+############## You should not need to edit below this line ###########
+
+execfile("/users/pdemores/config/astrid_utils.py")
+#execfile("/users/pdemores/config/astrid_cals.py")
+
+if Now() != None and not fix:
+    print "Using current time for session start"
+    sess_start_time = Now()
+sess_len = float(sess_stop_time - sess_start_time) / 3600.0
+print "Session time remaining = %.1fh" % sess_len
+
+nsrc = len(srcs.keys())
+print "nsrc = %d" % (nsrc)
+time_per_src = sess_len / float(nsrc) # hours
+print "time_per_src = %.1f min" % (time_per_src * 60.0)
+stop_time = {}
+start_time = {}
+i = 0
+for s in srcs.keys():
+    stop_time[s] = sess_start_time + float(i+1) * time_per_src / 24.0
+    start_time[s] = sess_start_time + float(i) * time_per_src / 24.0
+    i += 1
+    print "  Src '%s' start:%s, stop:%s" % (s, start_time[s], stop_time[s])
+
+# Config items common to all obs
+config_common = """
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+"""
+
+# Config items common to L-band obs
+config_Lband_common="""
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to 820 obs
+config_820_common="""
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+vegas.numchan = 128
+vegas.polnmode = 'full_stokes'
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to S-band obs
+config_Sband_common="""
+receiver = 'Rcvr2_3'
+restfreq = 2000.0
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config for cal mode
+config_cal = """
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+"""
+
+# Config for psr fold mode.
+# Note the '%s' for parfile that needs to be filled in when using this.
+config_psr = """
+vegas.obsmode = 'coherent_fold'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+vegas.fold_parfile = '%s'
+swmode = 'tp_nocal'
+noisecal = 'off'
+"""
+
+# Check observing band
+if (band == '820'):
+   #config_common = config_common.replace("VEGAS/GUPPI","GUPPI")
+   #config_common = config_common.replace("vegas","guppi")
+   #config_820_common = config_820_common.replace("vegas.scale = 1015","")
+   #config_820_common = config_820_common.replace("vegas","guppi")
+   config0 = config_common + config_820_common
+   #config_cal = config_cal.replace("vegas","guppi")
+   #config_psr = config_psr.replace("vegas","guppi")
+elif (band== 'L'):
+   config0 = config_common + config_Lband_common
+elif (band=='S'):
+   config0 = config_common + config_Sband_common
+else:
+    Break("Invalid band ('%s') selected!" % band)
+
+# Figure out what source to start on
+#if start_src == None:
+start_src = None
+
+if True:
+    cur_time = Now()
+    for s in srcs.keys():
+        if (cur_time < stop_time[s]):
+            start_src = s
+            break
+
+# Initial slew, config, balance
+print config0
+print "First source: %s" % start_src
+Configure(config0 + config_cal)
+SetValues("DCR",{"state":"prepare"})
+Slew(start_src)
+Balance()
+Balance("VEGAS")
+# Note: use these for 820 recvr 2013/05/19
+#Balance("IFRack")
+#Balance("GUPPI")
+Break("Check GUPPI levels now.")
+
+# 2013/06/06 - route to vegas bank A for Glenn's stuff
+#SetValues("ConverterRack",{"CMInput,1":"A"})
+#SetValues("ConverterRack",{"CMInput,5":"A"})
+#if (band=='820'):
+#    SetValues("ConverterRack",{"Gfrequency,1":11068})
+#elif (band=='L'):
+#    #SetValues("ConverterRack",{"Gfrequency,1":13088})
+#    SetValues("ConverterRack",{"Gfrequency,1":13288})
+#SetValues("ConverterRack",{"CMAttenuator1":22.0})
+#SetValues("ConverterRack",{"CMAttenuator5":22.0})
+#SetValues("ConverterRack",{"CMOutput,1":3})
+#SetValues("ConverterRack",{"CMOutput,5":3})
+#SetValues("ConverterRack",{"state":"prepare"})
+
+# Main observing loop
+first=1
+for s in srcs.keys():
+    if (first and s!=start_src):
+        continue
+    first=0;
+    print "Starting '%s'" % s
+    alias = "%4.4d" % srcs[s]["alias"]
+    parfile = "/users/pdemores/tzpar/%s.par" % s
+    print parfile
+    Slew(s)
+    print "############## HERE ##################"
+    print config0+config_cal
+    Configure(config0 + config_cal)
+    SetValues("DCR",{"state":"prepare"})
+    Balance("IFRack")
+    # Regular PSR observing
+    Track(s, None, 90.0) # Cal scan
+    Configure(config0 + config_psr % parfile)
+    Track(s, None, stopTime=stop_time[s])
+
+#######################################################
+ LOG SESSION NUMBER 1 
+[00:30:50] ******** Begin Scheduling Block
+[00:30:50] ******** observer = Thankful Cromartie, SB name = nanograv_timing_vegas, project ID = AGBT18B_226, date = 01 Sep 2019
+
+[00:30:50] Using current time for session start
+[00:30:50] Session time remaining = 3.0h
+[00:30:50] nsrc = 6
+[00:30:50] time_per_src = 29.9 min
+[00:30:50]   Src 'J1747-4036' start:2019-09-01 00:30:50.85, stop:2019-09-01 01:00:42.37
+[00:30:50]   Src 'J1909-3744' start:2019-09-01 01:00:42.37, stop:2019-09-01 01:30:33.90
+[00:30:50]   Src 'J2010-1323' start:2019-09-01 01:30:33.90, stop:2019-09-01 02:00:25.42
+[00:30:50]   Src 'J2145-0750' start:2019-09-01 02:00:25.42, stop:2019-09-01 02:30:16.95
+[00:30:50]   Src 'J2150-0326' start:2019-09-01 02:30:16.95, stop:2019-09-01 03:00:08.47
+[00:30:50]   Src 'J0740+6620' start:2019-09-01 03:00:08.47, stop:2019-09-01 03:30:00.00
+[00:30:50] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+[00:30:50] First source: J1747-4036
+[00:30:50] Configuring telescope.
+[00:30:51]     Setting State: Activating
+[00:31:24]     Setting State: Ready
+[00:31:26]     Setting State: Activating
+[00:31:27] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[00:31:27] Default values are
+[00:31:27] nchan  =  512
+[00:31:27] beam  =  B1
+[00:31:27] dm  =  0
+[00:31:27] if3freq  =  [0]
+[00:31:27] subband  =  1
+[00:31:27] fold_parfile  =  
+[00:31:27] polswitch  =  thru
+[00:31:27] Configuring for backend VEGAS...
+[00:31:27] The bad devices are: 
+[00:31:27] ConverterFilter14
+[00:31:27] ConverterFilter2
+[00:31:27] ConverterFilter16
+[00:31:27] ConverterFilter10
+[00:31:27] ConverterFilter12
+[00:31:27] The bad devices are: 
+[00:31:27] ConverterFilter14
+[00:31:27] ConverterFilter2
+[00:31:27] ConverterFilter16
+[00:31:27] ConverterFilter10
+[00:31:27] ConverterFilter12
+[00:31:27] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[00:31:27] BankH [400.0]
+[00:31:27] BankC [400.0]
+[00:31:27] BankB [400.0]
+[00:31:27] BankA [400.0]
+[00:31:27] BankG [400.0]
+[00:31:27] BankF [400.0]
+[00:31:27] BankE [400.0]
+[00:31:27] BankD [400.0]
+[00:31:27] Configuring for backend GUPPI...
+[00:31:27] The bad devices are: 
+[00:31:27] ConverterFilter14
+[00:31:27] ConverterFilter16
+[00:31:27] ConverterFilter2
+[00:31:27] ConverterFilter12
+[00:31:27] ConverterModule5
+[00:31:27] ConverterFilter10
+[00:31:27] ConverterModule1
+[00:31:27] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[00:31:27] Waiting for  GUPPI to finish activating
+[00:31:27] . . . . . . . . . . . . . . . . . . . . . . Waiting for  ScanCoordinator to finish activating
+[00:31:27] . . . . . . . . . . . .
+[00:31:27]  Finalizing VEGAS config...
+[00:31:27] Checking telescope
+[00:31:27] Configuration Complete
+[00:31:27] source : J1747-4036
+               alias : 1747.0
+               jname : J1747-4036
+               location : J2000 @ (17:47:48.72, -40:36:54.80)
+[00:31:27] Slewing to source.
+[00:31:27] In state Activating, waiting for state Activating
+[00:31:27] Detected state Activating
+[00:31:27] In state Activating, waiting for state Ready
+[00:34:15]     Setting State: Ready
+[00:34:15] Detected state Ready
+[00:34:15] Balancing IF system.
+[00:34:15] Balancing IFRack
+[00:34:16]     Setting State: Activating
+[00:34:16]     Setting State: Ready
+[00:34:17] the sampler values are:
+[00:34:17] RF_power 1 : 0.9326172
+[00:34:17] RF_power 2 : 0.02929688
+[00:34:17] RF_power 3 : 1.098633
+[00:34:17] RF_power 4 : 0.01464844
+[00:34:17] RF_power 5 : 5.81543
+[00:34:17] RF_power 6 : 0.7080078
+[00:34:17] RF_power 7 : 5.112305
+[00:34:17] RF_power 8 : 0.1269531
+[00:34:17] Balancing Guppi
+[00:34:17]     Setting State: Activating
+[00:34:17]     Setting State: Ready
+[00:34:17]     Setting State: Activating
+[00:34:17]     Setting State: Ready
+[00:34:17]     Setting State: Activating
+[00:34:17]     Setting State: Ready
+[00:34:18]     Setting State: Activating
+[00:34:18]     Setting State: Ready
+[00:34:20] Filter 8 RF power =
+[00:34:20] 2.5927734375
+[00:34:20] Filter 4 RF power =
+[00:34:20] 1.6796875
+[00:34:21]     Setting State: Activating
+[00:34:21]     Setting State: Ready
+[00:34:21]     Setting State: Activating
+[00:34:21]     Setting State: Ready
+[00:34:21] Balancing IF system.
+[00:34:21] Balancing VEGAS
+[00:34:21]     Setting State: Activating
+[00:34:21]     Setting State: Ready
+[00:34:21]     Setting State: Activating
+[00:34:21]     Setting State: Ready
+[00:34:21]     Setting State: Activating
+[00:34:21]     Setting State: Ready
+[00:34:24]     Setting State: Activating
+[00:34:24]     Setting State: Ready
+[00:34:24]     Setting State: Activating
+[00:34:24]     Setting State: Ready
+[00:34:24] 
+[00:34:24] User queried: "Check GUPPI levels now. - Continue scheduling block?" waiting for reply...
+[00:34:26] User replied: "Yes".
+[00:34:26] Starting 'J1747-4036'
+[00:34:26] /users/pdemores/tzpar/J1747-4036.par
+[00:34:26] source : J1747-4036
+               alias : 1747.0
+               jname : J1747-4036
+               location : J2000 @ (17:47:48.72, -40:36:54.80)
+[00:34:27] Slewing to source.
+[00:34:27] In state Ready, waiting for state Activating
+[00:34:27]     Setting State: Activating
+[00:34:27] Detected state Activating
+[00:34:27] In state Activating, waiting for state Ready
+[00:34:29]     Setting State: Ready
+[00:34:29] Detected state Ready
+[00:34:29] ############## HERE ##################
+[00:34:29] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[00:34:29] Configuring telescope.
+[00:34:29]     Setting State: Activating
+[00:34:51]     Setting State: Ready
+[00:34:52]     Setting State: Activating
+[00:34:53] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[00:34:53] Default values are
+[00:34:53] nchan  =  512
+[00:34:53] beam  =  B1
+[00:34:53] dm  =  0
+[00:34:53] if3freq  =  [0]
+[00:34:53] subband  =  1
+[00:34:53] fold_parfile  =  
+[00:34:53] polswitch  =  thru
+[00:34:53] Configuring for backend VEGAS...
+[00:34:53] The bad devices are: 
+[00:34:53] ConverterFilter14
+[00:34:53] ConverterFilter2
+[00:34:53] ConverterFilter16
+[00:34:53] ConverterFilter10
+[00:34:53] ConverterFilter12
+[00:34:53] The bad devices are: 
+[00:34:53] ConverterFilter14
+[00:34:53] ConverterFilter2
+[00:34:53] ConverterFilter16
+[00:34:53] ConverterFilter10
+[00:34:53] ConverterFilter12
+[00:34:53] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[00:34:53] BankH [400.0]
+[00:34:53] BankC [400.0]
+[00:34:53] BankB [400.0]
+[00:34:53] BankA [400.0]
+[00:34:53] BankG [400.0]
+[00:34:53] BankF [400.0]
+[00:34:53] BankE [400.0]
+[00:34:53] BankD [400.0]
+[00:34:53] Configuring for backend GUPPI...
+[00:34:53] The bad devices are: 
+[00:34:53] ConverterFilter14
+[00:34:53] ConverterFilter16
+[00:34:53] ConverterFilter2
+[00:34:53] ConverterFilter12
+[00:34:53] ConverterModule5
+[00:34:53] ConverterFilter10
+[00:34:53] ConverterModule1
+[00:34:53] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[00:34:53] Waiting for  GUPPI to finish activating
+[00:34:53] . . . . . . . . . . . . . . . . . . . . . .
+[00:34:53]  Finalizing VEGAS config...
+[00:34:53] Checking telescope
+[00:34:53] Configuration Complete
+[00:34:53] Balancing IF system.
+[00:34:53] Balancing IFRack
+[00:34:56] the sampler values are:
+[00:34:56] RF_power 1 : 0.9375
+[00:34:56] RF_power 2 : 0.02929688
+[00:34:56] RF_power 3 : 1.025391
+[00:34:56] RF_power 4 : 0.01953125
+[00:34:56] RF_power 5 : 5.566406
+[00:34:56] RF_power 6 : 0.7714844
+[00:34:56] RF_power 7 : 5.009766
+[00:34:56] RF_power 8 : 0.1416016
+[00:34:56]     Setting State: Ready
+[00:34:56] source : J1747-4036
+               alias : 1747.0
+               jname : J1747-4036
+               location : J2000 @ (17:47:48.72, -40:36:54.80)
+[00:34:57] Track: Subscan 1 of 1
+[00:34:57] In state Ready, waiting for state Running
+[00:34:57]     Setting State: Activating
+[00:34:57]     Setting State: Committed
+[00:35:24]     Setting State: Running
+[00:35:24] Detected state Running
+[00:35:24] *** Notice: This subscan will be numbered as scan #1 in your data reduction package.
+[00:35:24] In state Running, waiting for state Ready
+[00:36:56]     Setting State: Stopping
+[00:37:04]     Setting State: Ready
+[00:37:04] Detected state Ready
+[00:37:04] Ygor Telescope: WaitForStopping
+[00:37:04] Configuring telescope.
+[00:37:04]     Setting State: Activating
+[00:37:26]     Setting State: Ready
+[00:37:28]     Setting State: Activating
+[00:37:29] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[00:37:29] Default values are
+[00:37:29] nchan  =  512
+[00:37:29] beam  =  B1
+[00:37:29] dm  =  0
+[00:37:29] if3freq  =  [0]
+[00:37:29] subband  =  1
+[00:37:29] polswitch  =  thru
+[00:37:29] Configuring for backend VEGAS...
+[00:37:29] The bad devices are: 
+[00:37:29] ConverterFilter14
+[00:37:29] ConverterFilter2
+[00:37:29] ConverterFilter16
+[00:37:29] ConverterFilter10
+[00:37:29] ConverterFilter12
+[00:37:29] The bad devices are: 
+[00:37:29] ConverterFilter14
+[00:37:29] ConverterFilter2
+[00:37:29] ConverterFilter16
+[00:37:29] ConverterFilter10
+[00:37:29] ConverterFilter12
+[00:37:29] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[00:37:29] BankH [400.0]
+[00:37:29] BankC [400.0]
+[00:37:29] BankB [400.0]
+[00:37:29] BankA [400.0]
+[00:37:29] BankG [400.0]
+[00:37:29] BankF [400.0]
+[00:37:29] BankE [400.0]
+[00:37:29] BankD [400.0]
+[00:37:29] Configuring for backend GUPPI...
+[00:37:29] The bad devices are: 
+[00:37:29] ConverterFilter14
+[00:37:29] ConverterFilter16
+[00:37:29] ConverterFilter2
+[00:37:29] ConverterFilter12
+[00:37:29] ConverterModule5
+[00:37:29] ConverterFilter10
+[00:37:29] ConverterModule1
+[00:37:29] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[00:37:29] Waiting for  GUPPI to finish activating
+[00:37:29] . . . . . . . . . . . . . . . . . . . . . .
+[00:37:29]  Finalizing VEGAS config...
+[00:37:29] Checking telescope
+[00:37:29] Configuration Complete
+[00:37:29] source : J1747-4036
+               alias : 1747.0
+               jname : J1747-4036
+               location : J2000 @ (17:47:48.72, -40:36:54.80)
+[00:37:29] Track: Subscan 1 of 1
+[00:37:29] In state Activating, waiting for state Running
+[00:37:30]     Setting State: Committed
+[00:37:35]     Setting State: Running
+[00:37:35] Detected state Running
+[00:37:35] *** Notice: This subscan will be numbered as scan #2 in your data reduction package.
+[00:37:35] In state Running, waiting for state Ready
+[01:00:42]     Setting State: Stopping
+[01:00:50]     Setting State: Ready
+[01:00:50] Detected state Ready
+[01:00:50] Ygor Telescope: WaitForStopping
+[01:00:50] Starting 'J1909-3744'
+[01:00:50] /users/pdemores/tzpar/J1909-3744.par
+[01:00:50] source : J1909-3744
+               alias : 1909.0
+               jname : J1909-3744
+               location : J2000 @ (19:09:47.43, -37:44:14.30)
+[01:00:50] Slewing to source.
+[01:00:50] In state Ready, waiting for state Activating
+[01:00:50]     Setting State: Activating
+[01:00:50] Detected state Activating
+[01:00:50] In state Activating, waiting for state Ready
+[01:01:42]     Setting State: Ready
+[01:01:42] Detected state Ready
+[01:01:42] ############## HERE ##################
+[01:01:42] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[01:01:42] Configuring telescope.
+[01:01:42]     Setting State: Activating
+[01:02:04]     Setting State: Ready
+[01:02:06]     Setting State: Activating
+[01:02:07] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[01:02:07] Default values are
+[01:02:07] nchan  =  512
+[01:02:07] beam  =  B1
+[01:02:07] dm  =  0
+[01:02:07] if3freq  =  [0]
+[01:02:07] subband  =  1
+[01:02:07] polswitch  =  thru
+[01:02:07] Configuring for backend VEGAS...
+[01:02:07] The bad devices are: 
+[01:02:07] ConverterFilter14
+[01:02:07] ConverterFilter2
+[01:02:07] ConverterFilter16
+[01:02:07] ConverterFilter10
+[01:02:07] ConverterFilter12
+[01:02:07] The bad devices are: 
+[01:02:07] ConverterFilter14
+[01:02:07] ConverterFilter2
+[01:02:07] ConverterFilter16
+[01:02:07] ConverterFilter10
+[01:02:07] ConverterFilter12
+[01:02:07] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[01:02:07] BankH [400.0]
+[01:02:07] BankC [400.0]
+[01:02:07] BankB [400.0]
+[01:02:07] BankA [400.0]
+[01:02:07] BankG [400.0]
+[01:02:07] BankF [400.0]
+[01:02:07] BankE [400.0]
+[01:02:07] BankD [400.0]
+[01:02:07] Configuring for backend GUPPI...
+[01:02:07] The bad devices are: 
+[01:02:07] ConverterFilter14
+[01:02:07] ConverterFilter16
+[01:02:07] ConverterFilter2
+[01:02:07] ConverterFilter12
+[01:02:07] ConverterModule5
+[01:02:07] ConverterFilter10
+[01:02:07] ConverterModule1
+[01:02:07] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[01:02:07] Waiting for  GUPPI to finish activating
+[01:02:07] . . . . . . . . . . . . . . . . . . . . . .
+[01:02:07]  Finalizing VEGAS config...
+[01:02:07] Checking telescope
+[01:02:07] Configuration Complete
+[01:02:07] Balancing IF system.
+[01:02:07] Balancing IFRack
+[01:02:07]     Setting State: Ready
+[01:02:08]     Setting State: Activating
+[01:02:09]     Setting State: Ready
+[01:02:09] the sampler values are:
+[01:02:09] RF_power 1 : 0.9863281
+[01:02:09] RF_power 2 : 0.02441406
+[01:02:09] RF_power 3 : 1.054688
+[01:02:09] RF_power 4 : 0.01464844
+[01:02:09] RF_power 5 : 9.042969
+[01:02:09] RF_power 6 : 0.6494141
+[01:02:09] RF_power 7 : 3.955078
+[01:02:09] RF_power 8 : 0.1269531
+[01:02:10] source : J1909-3744
+               alias : 1909.0
+               jname : J1909-3744
+               location : J2000 @ (19:09:47.43, -37:44:14.30)
+[01:02:10] Track: Subscan 1 of 1
+[01:02:10] In state Ready, waiting for state Running
+[01:02:10]     Setting State: Activating
+[01:02:11]     Setting State: Committed
+[01:02:37]     Setting State: Running
+[01:02:37] Detected state Running
+[01:02:37] *** Notice: This subscan will be numbered as scan #3 in your data reduction package.
+[01:02:37] In state Running, waiting for state Ready
+[01:04:09]     Setting State: Stopping
+[01:04:17]     Setting State: Ready
+[01:04:17] Detected state Ready
+[01:04:17] Ygor Telescope: WaitForStopping
+[01:04:17] Configuring telescope.
+[01:04:17]     Setting State: Activating
+[01:04:39]     Setting State: Ready
+[01:04:40]     Setting State: Activating
+[01:04:41] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[01:04:41] Default values are
+[01:04:41] nchan  =  512
+[01:04:41] beam  =  B1
+[01:04:41] dm  =  0
+[01:04:41] if3freq  =  [0]
+[01:04:41] subband  =  1
+[01:04:41] polswitch  =  thru
+[01:04:41] Configuring for backend VEGAS...
+[01:04:41] The bad devices are: 
+[01:04:41] ConverterFilter14
+[01:04:41] ConverterFilter2
+[01:04:41] ConverterFilter16
+[01:04:41] ConverterFilter10
+[01:04:41] ConverterFilter12
+[01:04:41] The bad devices are: 
+[01:04:41] ConverterFilter14
+[01:04:41] ConverterFilter2
+[01:04:41] ConverterFilter16
+[01:04:41] ConverterFilter10
+[01:04:41] ConverterFilter12
+[01:04:41] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[01:04:41] BankH [400.0]
+[01:04:41] BankC [400.0]
+[01:04:41] BankB [400.0]
+[01:04:41] BankA [400.0]
+[01:04:41] BankG [400.0]
+[01:04:41] BankF [400.0]
+[01:04:41] BankE [400.0]
+[01:04:41] BankD [400.0]
+[01:04:41] Configuring for backend GUPPI...
+[01:04:41] The bad devices are: 
+[01:04:41] ConverterFilter14
+[01:04:41] ConverterFilter16
+[01:04:41] ConverterFilter2
+[01:04:41] ConverterFilter12
+[01:04:41] ConverterModule5
+[01:04:41] ConverterFilter10
+[01:04:41] ConverterModule1
+[01:04:41] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[01:04:41] Waiting for  GUPPI to finish activating
+[01:04:41] . . . . . . . . . . . . . . . . . . . . . .
+[01:04:41]  Finalizing VEGAS config...
+[01:04:41] Checking telescope
+[01:04:41] Configuration Complete
+[01:04:41] source : J1909-3744
+               alias : 1909.0
+               jname : J1909-3744
+               location : J2000 @ (19:09:47.43, -37:44:14.30)
+[01:04:41] Track: Subscan 1 of 1
+[01:04:42]     Setting State: Ready
+[01:04:42] In state Ready, waiting for state Running
+[01:04:42]     Setting State: Activating
+[01:04:42]     Setting State: Committed
+[01:04:48]     Setting State: Running
+[01:04:48] Detected state Running
+[01:04:48] *** Notice: This subscan will be numbered as scan #4 in your data reduction package.
+[01:04:48] In state Running, waiting for state Ready
+[01:30:33]     Setting State: Stopping
+[01:30:41]     Setting State: Ready
+[01:30:41] Detected state Ready
+[01:30:41] Ygor Telescope: WaitForStopping
+[01:30:41] Starting 'J2010-1323'
+[01:30:41] /users/pdemores/tzpar/J2010-1323.par
+[01:30:41] source : J2010-1323
+               alias : 2010.0
+               jname : J2010-1323
+               location : J2000 @ (20:10:45.91, -13:23:56.00)
+[01:30:41] Slewing to source.
+[01:30:41] In state Ready, waiting for state Activating
+[01:30:41]     Setting State: Activating
+[01:30:41] Detected state Activating
+[01:30:41] In state Activating, waiting for state Ready
+[01:32:05]     Setting State: Ready
+[01:32:05] Detected state Ready
+[01:32:05] ############## HERE ##################
+[01:32:05] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[01:32:05] Configuring telescope.
+[01:32:05]     Setting State: Activating
+[01:32:27]     Setting State: Ready
+[01:32:28]     Setting State: Activating
+[01:32:29] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[01:32:29] Default values are
+[01:32:30] nchan  =  512
+[01:32:30] beam  =  B1
+[01:32:30] dm  =  0
+[01:32:30] if3freq  =  [0]
+[01:32:30] subband  =  1
+[01:32:30] polswitch  =  thru
+[01:32:30] Configuring for backend VEGAS...
+[01:32:30] The bad devices are: 
+[01:32:30] ConverterFilter14
+[01:32:30] ConverterFilter2
+[01:32:30] ConverterFilter16
+[01:32:30] ConverterFilter10
+[01:32:30] ConverterFilter12
+[01:32:30] The bad devices are: 
+[01:32:30] ConverterFilter14
+[01:32:30] ConverterFilter2
+[01:32:30] ConverterFilter16
+[01:32:30] ConverterFilter10
+[01:32:30] ConverterFilter12
+[01:32:30] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[01:32:30] BankH [400.0]
+[01:32:30] BankC [400.0]
+[01:32:30] BankB [400.0]
+[01:32:30] BankA [400.0]
+[01:32:30] BankG [400.0]
+[01:32:30] BankF [400.0]
+[01:32:30] BankE [400.0]
+[01:32:30] BankD [400.0]
+[01:32:30] Configuring for backend GUPPI...
+[01:32:30] The bad devices are: 
+[01:32:30] ConverterFilter14
+[01:32:30] ConverterFilter16
+[01:32:30] ConverterFilter2
+[01:32:30] ConverterFilter12
+[01:32:30] ConverterModule5
+[01:32:30] ConverterFilter10
+[01:32:30] ConverterModule1
+[01:32:30] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[01:32:30] Waiting for  GUPPI to finish activating
+[01:32:30] . . . . . . . . . . . . . . . . . . . . . .
+[01:32:30]  Finalizing VEGAS config...
+[01:32:30] Checking telescope
+[01:32:30] Configuration Complete
+[01:32:30] Balancing IF system.
+[01:32:30] Balancing IFRack
+[01:32:30]     Setting State: Ready
+[01:32:31]     Setting State: Activating
+[01:32:32] the sampler values are:
+[01:32:32] RF_power 1 : 0.9082031
+[01:32:32] RF_power 2 : 0.02929688
+[01:32:32] RF_power 3 : 1.015625
+[01:32:32] RF_power 4 : 0.01953125
+[01:32:32] RF_power 5 : 4.169922
+[01:32:32] RF_power 6 : 0.6347656
+[01:32:32] RF_power 7 : 3.481445
+[01:32:32] RF_power 8 : 0.1171875
+[01:32:32]     Setting State: Ready
+[01:32:33] source : J2010-1323
+               alias : 2010.0
+               jname : J2010-1323
+               location : J2000 @ (20:10:45.91, -13:23:56.00)
+[01:32:33] Track: Subscan 1 of 1
+[01:32:33] In state Ready, waiting for state Running
+[01:32:33]     Setting State: Activating
+[01:32:33]     Setting State: Committed
+[01:33:01]     Setting State: Running
+[01:33:01] Detected state Running
+[01:33:01] *** Notice: This subscan will be numbered as scan #5 in your data reduction package.
+[01:33:01] In state Running, waiting for state Ready
+[01:34:33]     Setting State: Stopping
+[01:34:40]     Setting State: Ready
+[01:34:40] Detected state Ready
+[01:34:40] Ygor Telescope: WaitForStopping
+[01:34:40] Configuring telescope.
+[01:34:40]     Setting State: Activating
+[01:35:02]     Setting State: Ready
+[01:35:04]     Setting State: Activating
+[01:35:05] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[01:35:05] Default values are
+[01:35:05] nchan  =  512
+[01:35:05] beam  =  B1
+[01:35:05] dm  =  0
+[01:35:05] if3freq  =  [0]
+[01:35:05] subband  =  1
+[01:35:05] polswitch  =  thru
+[01:35:05] Configuring for backend VEGAS...
+[01:35:05] The bad devices are: 
+[01:35:05] ConverterFilter14
+[01:35:05] ConverterFilter2
+[01:35:05] ConverterFilter16
+[01:35:05] ConverterFilter10
+[01:35:05] ConverterFilter12
+[01:35:05] The bad devices are: 
+[01:35:05] ConverterFilter14
+[01:35:05] ConverterFilter2
+[01:35:05] ConverterFilter16
+[01:35:05] ConverterFilter10
+[01:35:05] ConverterFilter12
+[01:35:05] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[01:35:05] BankH [400.0]
+[01:35:05] BankC [400.0]
+[01:35:05] BankB [400.0]
+[01:35:05] BankA [400.0]
+[01:35:05] BankG [400.0]
+[01:35:05] BankF [400.0]
+[01:35:05] BankE [400.0]
+[01:35:05] BankD [400.0]
+[01:35:05] Configuring for backend GUPPI...
+[01:35:05] The bad devices are: 
+[01:35:05] ConverterFilter14
+[01:35:05] ConverterFilter16
+[01:35:05] ConverterFilter2
+[01:35:05] ConverterFilter12
+[01:35:05] ConverterModule5
+[01:35:05] ConverterFilter10
+[01:35:05] ConverterModule1
+[01:35:05] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[01:35:05] Waiting for  GUPPI to finish activating
+[01:35:05] . . . . . . . . . . . . . . . . . . . . . .
+[01:35:05]  Finalizing VEGAS config...
+[01:35:05] Checking telescope
+[01:35:05] Configuration Complete
+[01:35:05] source : J2010-1323
+               alias : 2010.0
+               jname : J2010-1323
+               location : J2000 @ (20:10:45.91, -13:23:56.00)
+[01:35:05] Track: Subscan 1 of 1
+[01:35:05] In state Activating, waiting for state Running
+[01:35:06]     Setting State: Committed
+[01:35:11]     Setting State: Running
+[01:35:11] Detected state Running
+[01:35:11] *** Notice: This subscan will be numbered as scan #6 in your data reduction package.
+[01:35:11] In state Running, waiting for state Ready
+[02:00:25]     Setting State: Stopping
+[02:00:33]     Setting State: Ready
+[02:00:33] Detected state Ready
+[02:00:33] Ygor Telescope: WaitForStopping
+[02:00:33] Starting 'J2145-0750'
+[02:00:33] /users/pdemores/tzpar/J2145-0750.par
+[02:00:33] source : J2145-0750
+               alias : 2145.0
+               jname : J2145-0750
+               location : J2000 @ (21:45:50.46, -07:50:18.30)
+[02:00:33] Slewing to source.
+[02:00:33] In state Ready, waiting for state Activating
+[02:00:33]     Setting State: Activating
+[02:00:33] Detected state Activating
+[02:00:33] In state Activating, waiting for state Ready
+[02:01:28]     Setting State: Aborting
+[02:01:28] ygor.Telescope: WaitForReady: Asking abort confirmation.
+[02:01:28] 
+[02:01:28] User queried: "Abort detected! Terminate block?" waiting for reply...
+[02:01:38] User replied: "Yes".
+[02:01:38] Exiting scheduling block.
+runSuccessful: False[02:01:38]     Setting State: Ready
+
+[02:01:38] ******** End Scheduling Block
+[02:01:38] ******** observer = Thankful Cromartie, SB name = nanograv_timing_vegas, project ID = AGBT18B_226
+
+how much log? 26446 id: 233570self.history: <gbt.turtle.database.History.History instance at 0x54bd950>self.history.connection: <gbt.turtle.database.TurtleConnection.TurtleConnection instance at 0x54bd6c8>how much converted log? 26769 
+#######################################################
+ 
+ 
+#######################################################
+ SCRIPT NUMBER 2, project:AGBT18B_226_143 
+ 233571 685 Thankful Cromartie 13 Tyler Hise 2019-09-01 02:01:53 obs_completed 
+#######################################################
+ResetConfig()
+config_guppi = """
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+bandwidth = 800
+tint  = 81.92e-6
+swmode = 'tp_nocal' # cals
+noisecal = 'off'  # 'lo' for cals
+swtype = 'none'
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+vframe = 'topo'
+vdef = 'Radio'
+guppi.obsmode = 'search'
+guppi.numchan = 512
+guppi.polnmode = 'total_intensity'
+guppi.scale = 5.0
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+"""
+Configure(config_guppi)
+#######################################################
+ LOG SESSION NUMBER 2 
+[02:01:53] ******** Begin Scheduling Block
+[02:01:53] ******** observer = Thankful Cromartie, SB name = ResetConfig, project ID = AGBT18B_226, date = 01 Sep 2019
+
+[02:01:53] *** Notice:Resetting the configuration. You must run another configuration before running a scan
+[02:01:53] *** Notice:Resetting the configuration. You must run another configuration before running a scan
+[02:01:54] Configuring telescope.
+[02:01:54]     Setting State: Activating
+[02:02:15]     Setting State: Ready
+[02:02:16]     Setting State: Activating
+[02:02:17]     Setting State: Ready
+[02:02:17] Default values are
+[02:02:17] nchan  =  512
+[02:02:17] beam  =  B1
+[02:02:17] fold_dumptime  =  60
+[02:02:17] fold_bins  =  256
+[02:02:17] dm  =  0
+[02:02:17] if3freq  =  [0]
+[02:02:17] polswitch  =  thru
+[02:02:17] Configuring for backend GUPPI...
+[02:02:17] The bad devices are: 
+[02:02:17] ConverterFilter14
+[02:02:17] ConverterFilter2
+[02:02:17] ConverterFilter16
+[02:02:17] ConverterFilter10
+[02:02:17] ConverterFilter12
+[02:02:17] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:02:17] Waiting for  GUPPI to finish activating
+[02:02:17] . . . . . . . . . . . . . . . . . . . . .
+[02:02:17] Checking telescope
+[02:02:17] Configuration Complete
+runSuccessful: True
+[02:02:17] ******** End Scheduling Block
+[02:02:17] ******** observer = Thankful Cromartie, SB name = ResetConfig, project ID = AGBT18B_226
+
+how much log? 1452 id: 233571self.history: <gbt.turtle.database.History.History instance at 0x54bd950>self.history.connection: <gbt.turtle.database.TurtleConnection.TurtleConnection instance at 0x54bd6c8>how much converted log? 1656 
+#######################################################
+ 
+ 
+#######################################################
+ SCRIPT NUMBER 3, project:AGBT18B_226_143 
+ 233572 685 Thankful Cromartie 13 Tyler Hise 2019-09-01 02:02:26 obs_aborted 
+#######################################################
+# NANOGrav timing astrid block, 2012/02 PBD
+# Modified for GUPPI + VEGAS, 2018/03 KS
+
+# IMPORTANT!  Edit this to pick which band you're observing#
+#band = '820'
+band = 'L'
+#band = 'S'
+
+# IMPORTANT!  Edit this to pick which session you're observing
+# All sources in the catalog will be observed in order, with the 
+# remaining session time divided evenly between them. To 
+# restart a interrupted session, first edit the catalog and comment
+# out sources that have already been observed today.
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_A.cat")
+srcs = Catalog("/users/pdemores/sched/18B226_2018_session_B.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_C.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_D.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_E.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_F.cat")
+#Use personal catalog file, rather than editing Paul's files:
+#srcs = Catalog("/users/amcewen/18B226_2018_session_F.cat")
+
+# IMPORTANT!  Edit here to set the session's start/stop times in UTC!
+# NOTES:
+#  - start time does not need to be edited if the script is stopped/restarted.
+#    it will always use the current time when running 'for real'.
+#  - don't use any leading 0's in the values here, (leading 0 is code for
+#    octal).
+from mx import DateTime
+# Function args are year, month, day, hour (24 hr), min, sec (UTC)
+sess_start_time = DateTime.DateTime(2019,9,1,00,30,0) # UTC
+sess_stop_time = DateTime.DateTime(2019,9,1,03,30,0) # UTC
+
+# Use fixed start time rather than current time.
+fix = False
+
+############## You should not need to edit below this line ###########
+
+execfile("/users/pdemores/config/astrid_utils.py")
+#execfile("/users/pdemores/config/astrid_cals.py")
+
+if Now() != None and not fix:
+    print "Using current time for session start"
+    sess_start_time = Now()
+sess_len = float(sess_stop_time - sess_start_time) / 3600.0
+print "Session time remaining = %.1fh" % sess_len
+
+nsrc = len(srcs.keys())
+print "nsrc = %d" % (nsrc)
+time_per_src = sess_len / float(nsrc) # hours
+print "time_per_src = %.1f min" % (time_per_src * 60.0)
+stop_time = {}
+start_time = {}
+i = 0
+for s in srcs.keys():
+    stop_time[s] = sess_start_time + float(i+1) * time_per_src / 24.0
+    start_time[s] = sess_start_time + float(i) * time_per_src / 24.0
+    i += 1
+    print "  Src '%s' start:%s, stop:%s" % (s, start_time[s], stop_time[s])
+
+# Config items common to all obs
+config_common = """
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+"""
+
+# Config items common to L-band obs
+config_Lband_common="""
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to 820 obs
+config_820_common="""
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+vegas.numchan = 128
+vegas.polnmode = 'full_stokes'
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to S-band obs
+config_Sband_common="""
+receiver = 'Rcvr2_3'
+restfreq = 2000.0
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config for cal mode
+config_cal = """
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+"""
+
+# Config for psr fold mode.
+# Note the '%s' for parfile that needs to be filled in when using this.
+config_psr = """
+vegas.obsmode = 'coherent_fold'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+vegas.fold_parfile = '%s'
+swmode = 'tp_nocal'
+noisecal = 'off'
+"""
+
+# Check observing band
+if (band == '820'):
+   #config_common = config_common.replace("VEGAS/GUPPI","GUPPI")
+   #config_common = config_common.replace("vegas","guppi")
+   #config_820_common = config_820_common.replace("vegas.scale = 1015","")
+   #config_820_common = config_820_common.replace("vegas","guppi")
+   config0 = config_common + config_820_common
+   #config_cal = config_cal.replace("vegas","guppi")
+   #config_psr = config_psr.replace("vegas","guppi")
+elif (band== 'L'):
+   config0 = config_common + config_Lband_common
+elif (band=='S'):
+   config0 = config_common + config_Sband_common
+else:
+    Break("Invalid band ('%s') selected!" % band)
+
+# Figure out what source to start on
+#if start_src == None:
+start_src = None
+
+if True:
+    cur_time = Now()
+    for s in srcs.keys():
+        if (cur_time < stop_time[s]):
+            start_src = s
+            break
+
+# Initial slew, config, balance
+print config0
+print "First source: %s" % start_src
+Configure(config0 + config_cal)
+SetValues("DCR",{"state":"prepare"})
+Slew(start_src)
+Balance()
+Balance("VEGAS")
+# Note: use these for 820 recvr 2013/05/19
+#Balance("IFRack")
+#Balance("GUPPI")
+Break("Check GUPPI levels now.")
+
+# 2013/06/06 - route to vegas bank A for Glenn's stuff
+#SetValues("ConverterRack",{"CMInput,1":"A"})
+#SetValues("ConverterRack",{"CMInput,5":"A"})
+#if (band=='820'):
+#    SetValues("ConverterRack",{"Gfrequency,1":11068})
+#elif (band=='L'):
+#    #SetValues("ConverterRack",{"Gfrequency,1":13088})
+#    SetValues("ConverterRack",{"Gfrequency,1":13288})
+#SetValues("ConverterRack",{"CMAttenuator1":22.0})
+#SetValues("ConverterRack",{"CMAttenuator5":22.0})
+#SetValues("ConverterRack",{"CMOutput,1":3})
+#SetValues("ConverterRack",{"CMOutput,5":3})
+#SetValues("ConverterRack",{"state":"prepare"})
+
+# Main observing loop
+first=1
+for s in srcs.keys():
+    if (first and s!=start_src):
+        continue
+    first=0;
+    print "Starting '%s'" % s
+    alias = "%4.4d" % srcs[s]["alias"]
+    parfile = "/users/pdemores/tzpar/%s.par" % s
+    print parfile
+    Slew(s)
+    print "############## HERE ##################"
+    print config0+config_cal
+    Configure(config0 + config_cal)
+    SetValues("DCR",{"state":"prepare"})
+    Balance("IFRack")
+    # Regular PSR observing
+    Track(s, None, 90.0) # Cal scan
+    Configure(config0 + config_psr % parfile)
+    Track(s, None, stopTime=stop_time[s])
+
+#######################################################
+ LOG SESSION NUMBER 3 
+[02:02:26] ******** Begin Scheduling Block
+[02:02:26] ******** observer = Thankful Cromartie, SB name = nanograv_timing_vegas, project ID = AGBT18B_226, date = 01 Sep 2019
+
+[02:02:26] Using current time for session start
+[02:02:26] Session time remaining = 1.5h
+[02:02:26] nsrc = 3
+[02:02:26] time_per_src = 29.2 min
+[02:02:26]   Src 'J2145-0750' start:2019-09-01 02:02:26.48, stop:2019-09-01 02:31:37.65
+[02:02:26]   Src 'J2150-0326' start:2019-09-01 02:31:37.65, stop:2019-09-01 03:00:48.83
+[02:02:26]   Src 'J0740+6620' start:2019-09-01 03:00:48.83, stop:2019-09-01 03:30:00.00
+[02:02:26] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+[02:02:26] First source: J2145-0750
+[02:02:26] Configuring telescope.
+[02:02:26]     Setting State: Activating
+[02:02:49]     Setting State: Ready
+[02:02:50]     Setting State: Activating
+[02:02:52] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:02:52] Default values are
+[02:02:52] nchan  =  512
+[02:02:52] beam  =  B1
+[02:02:52] dm  =  0
+[02:02:52] if3freq  =  [0]
+[02:02:52] subband  =  1
+[02:02:52] fold_parfile  =  
+[02:02:52] polswitch  =  thru
+[02:02:52] Configuring for backend VEGAS...
+[02:02:52] The bad devices are: 
+[02:02:52] ConverterFilter14
+[02:02:52] ConverterFilter2
+[02:02:52] ConverterFilter16
+[02:02:52] ConverterFilter10
+[02:02:52] ConverterFilter12
+[02:02:52] The bad devices are: 
+[02:02:52] ConverterFilter14
+[02:02:52] ConverterFilter2
+[02:02:52] ConverterFilter16
+[02:02:52] ConverterFilter10
+[02:02:52] ConverterFilter12
+[02:02:52] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:02:52] BankH [400.0]
+[02:02:52] BankC [400.0]
+[02:02:52] BankB [400.0]
+[02:02:52] BankA [400.0]
+[02:02:52] BankG [400.0]
+[02:02:52] BankF [400.0]
+[02:02:52] BankE [400.0]
+[02:02:52] BankD [400.0]
+[02:02:52] Configuring for backend GUPPI...
+[02:02:52] The bad devices are: 
+[02:02:52] ConverterFilter14
+[02:02:52] ConverterFilter16
+[02:02:52] ConverterFilter2
+[02:02:52] ConverterFilter12
+[02:02:52] ConverterModule5
+[02:02:52] ConverterFilter10
+[02:02:52] ConverterModule1
+[02:02:52] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:02:52] Waiting for  GUPPI to finish activating
+[02:02:52] . . . . . . . . . . . . . . . . . . . . . . .
+[02:02:52]  Finalizing VEGAS config...
+[02:02:52] Checking telescope
+[02:02:52] Configuration Complete
+[02:02:52] source : J2145-0750
+               alias : 2145.0
+               jname : J2145-0750
+               location : J2000 @ (21:45:50.46, -07:50:18.30)
+[02:02:52] Slewing to source.
+[02:02:52] In state Activating, waiting for state Activating
+[02:02:52] Detected state Activating
+[02:02:52] In state Activating, waiting for state Ready
+[02:03:16]     Setting State: Ready
+[02:03:16] Detected state Ready
+[02:03:16] Balancing IF system.
+[02:03:16] Balancing IFRack
+[02:03:16]     Setting State: Activating
+[02:03:16]     Setting State: Ready
+[02:03:18] the sampler values are:
+[02:03:18] RF_power 1 : 0.9570312
+[02:03:18] RF_power 2 : 0.02441406
+[02:03:18] RF_power 3 : 1.108398
+[02:03:18] RF_power 4 : 0.01953125
+[02:03:18] RF_power 5 : 3.989258
+[02:03:18] RF_power 6 : 0.6005859
+[02:03:18] RF_power 7 : 3.623047
+[02:03:18] RF_power 8 : 0.1171875
+[02:03:18] Balancing Guppi
+[02:03:18]     Setting State: Activating
+[02:03:18]     Setting State: Ready
+[02:03:18]     Setting State: Activating
+[02:03:18]     Setting State: Ready
+[02:03:19] Filter 8 RF power =
+[02:03:19] 2.626953125
+[02:03:19] Filter 4 RF power =
+[02:03:19] 1.7919921875
+[02:03:19]     Setting State: Activating
+[02:03:19]     Setting State: Ready
+[02:03:19]     Setting State: Activating
+[02:03:19]     Setting State: Ready
+[02:03:20] Balancing IF system.
+[02:03:20] Balancing VEGAS
+[02:03:20]     Setting State: Activating
+[02:03:20]     Setting State: Ready
+[02:03:20]     Setting State: Activating
+[02:03:20]     Setting State: Ready
+[02:03:21]     Setting State: Activating
+[02:03:21]     Setting State: Ready
+[02:03:21]     Setting State: Activating
+[02:03:21]     Setting State: Ready
+[02:03:22] 
+[02:03:22] User queried: "Check GUPPI levels now. - Continue scheduling block?" waiting for reply...
+[02:03:27] User replied: "Yes".
+[02:03:27] Starting 'J2145-0750'
+[02:03:27] /users/pdemores/tzpar/J2145-0750.par
+[02:03:27] source : J2145-0750
+               alias : 2145.0
+               jname : J2145-0750
+               location : J2000 @ (21:45:50.46, -07:50:18.30)
+[02:03:27] Slewing to source.
+[02:03:27] In state Ready, waiting for state Activating
+[02:03:27]     Setting State: Activating
+[02:03:27] Detected state Activating
+[02:03:27] In state Activating, waiting for state Ready
+[02:03:29]     Setting State: Ready
+[02:03:29] Detected state Ready
+[02:03:29] ############## HERE ##################
+[02:03:29] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[02:03:29] Configuring telescope.
+[02:03:29]     Setting State: Activating
+[02:03:51]     Setting State: Ready
+[02:03:53]     Setting State: Activating
+[02:03:54] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:03:54] Default values are
+[02:03:54] nchan  =  512
+[02:03:54] beam  =  B1
+[02:03:54] dm  =  0
+[02:03:54] if3freq  =  [0]
+[02:03:54] subband  =  1
+[02:03:54] fold_parfile  =  
+[02:03:54] polswitch  =  thru
+[02:03:54] Configuring for backend VEGAS...
+[02:03:54] The bad devices are: 
+[02:03:54] ConverterFilter14
+[02:03:54] ConverterFilter2
+[02:03:54] ConverterFilter16
+[02:03:54] ConverterFilter10
+[02:03:54] ConverterFilter12
+[02:03:54] The bad devices are: 
+[02:03:54] ConverterFilter14
+[02:03:54] ConverterFilter2
+[02:03:54] ConverterFilter16
+[02:03:54] ConverterFilter10
+[02:03:54] ConverterFilter12
+[02:03:54] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:03:54] BankH [400.0]
+[02:03:54] BankC [400.0]
+[02:03:54] BankB [400.0]
+[02:03:54] BankA [400.0]
+[02:03:54] BankG [400.0]
+[02:03:54] BankF [400.0]
+[02:03:54] BankE [400.0]
+[02:03:54] BankD [400.0]
+[02:03:54] Configuring for backend GUPPI...
+[02:03:54] The bad devices are: 
+[02:03:54] ConverterFilter14
+[02:03:54] ConverterFilter16
+[02:03:54] ConverterFilter2
+[02:03:54] ConverterFilter12
+[02:03:54] ConverterModule5
+[02:03:54] ConverterFilter10
+[02:03:54] ConverterModule1
+[02:03:54] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:03:54] Waiting for  GUPPI to finish activating
+[02:03:54] . . . . . . . . . . . . . . . . . . . . . .
+[02:03:54]  Finalizing VEGAS config...
+[02:03:54] Checking telescope
+[02:03:54] Configuration Complete
+[02:03:54] Balancing IF system.
+[02:03:54] Balancing IFRack
+[02:03:56]     Setting State: Ready
+[02:03:56] the sampler values are:
+[02:03:56] RF_power 1 : 0.9619141
+[02:03:56] RF_power 2 : 0.03417969
+[02:03:56] RF_power 3 : 0.8837891
+[02:03:56] RF_power 4 : 0.01464844
+[02:03:56] RF_power 5 : 3.979492
+[02:03:56] RF_power 6 : 0.6103516
+[02:03:56] RF_power 7 : 3.632812
+[02:03:56] RF_power 8 : 0.1220703
+[02:03:57] source : J2145-0750
+               alias : 2145.0
+               jname : J2145-0750
+               location : J2000 @ (21:45:50.46, -07:50:18.30)
+[02:03:57] Track: Subscan 1 of 1
+[02:03:57] In state Ready, waiting for state Running
+[02:03:57]     Setting State: Activating
+[02:03:58]     Setting State: Committed
+[02:04:24]     Setting State: Running
+[02:04:24] Detected state Running
+[02:04:24] *** Notice: This subscan will be numbered as scan #7 in your data reduction package.
+[02:04:24] In state Running, waiting for state Ready
+[02:05:56]     Setting State: Stopping
+[02:06:03]     Setting State: Ready
+[02:06:03] Detected state Ready
+[02:06:03] Ygor Telescope: WaitForStopping
+[02:06:03] Configuring telescope.
+[02:06:04]     Setting State: Activating
+[02:06:25]     Setting State: Ready
+[02:06:27]     Setting State: Activating
+[02:06:28] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:06:28] Default values are
+[02:06:28] nchan  =  512
+[02:06:28] beam  =  B1
+[02:06:28] dm  =  0
+[02:06:28] if3freq  =  [0]
+[02:06:28] subband  =  1
+[02:06:28] polswitch  =  thru
+[02:06:28] Configuring for backend VEGAS...
+[02:06:28] The bad devices are: 
+[02:06:28] ConverterFilter14
+[02:06:28] ConverterFilter2
+[02:06:28] ConverterFilter16
+[02:06:28] ConverterFilter10
+[02:06:28] ConverterFilter12
+[02:06:28] The bad devices are: 
+[02:06:28] ConverterFilter14
+[02:06:28] ConverterFilter2
+[02:06:28] ConverterFilter16
+[02:06:28] ConverterFilter10
+[02:06:28] ConverterFilter12
+[02:06:28] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:06:28] BankH [400.0]
+[02:06:28] BankC [400.0]
+[02:06:28] BankB [400.0]
+[02:06:28] BankA [400.0]
+[02:06:28] BankG [400.0]
+[02:06:28] BankF [400.0]
+[02:06:28] BankE [400.0]
+[02:06:28] BankD [400.0]
+[02:06:28] Configuring for backend GUPPI...
+[02:06:28] The bad devices are: 
+[02:06:28] ConverterFilter14
+[02:06:28] ConverterFilter16
+[02:06:28] ConverterFilter2
+[02:06:28] ConverterFilter12
+[02:06:28] ConverterModule5
+[02:06:28] ConverterFilter10
+[02:06:28] ConverterModule1
+[02:06:28] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:06:28] Waiting for  GUPPI to finish activating
+[02:06:28] . . . . . . . . . . . . . . . . . . . . . .
+[02:06:28]  Finalizing VEGAS config...
+[02:06:28] Checking telescope
+[02:06:28] Configuration Complete
+[02:06:28] source : J2145-0750
+               alias : 2145.0
+               jname : J2145-0750
+               location : J2000 @ (21:45:50.46, -07:50:18.30)
+[02:06:28] Track: Subscan 1 of 1
+[02:06:28] In state Activating, waiting for state Running
+[02:06:29]     Setting State: Committed
+[02:06:34]     Setting State: Running
+[02:06:34] Detected state Running
+[02:06:34] *** Notice: This subscan will be numbered as scan #8 in your data reduction package.
+[02:06:34] In state Running, waiting for state Ready
+[02:31:37]     Setting State: Stopping
+[02:31:41]     Setting State: Ready
+[02:31:41] Detected state Ready
+[02:31:41] Ygor Telescope: WaitForStopping
+[02:31:41] Starting 'J2150-0326'
+[02:31:41] /users/pdemores/tzpar/J2150-0326.par
+[02:31:41] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:31:41] Slewing to source.
+[02:31:41] In state Ready, waiting for state Activating
+[02:31:41]     Setting State: Activating
+[02:31:41] Detected state Activating
+[02:31:41] In state Activating, waiting for state Ready
+[02:32:07]     Setting State: Ready
+[02:32:07] Detected state Ready
+[02:32:07] ############## HERE ##################
+[02:32:07] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[02:32:07] Configuring telescope.
+[02:32:07]     Setting State: Activating
+[02:32:29]     Setting State: Ready
+[02:32:31]     Setting State: Activating
+[02:32:32] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:32:32] Default values are
+[02:32:32] nchan  =  512
+[02:32:32] beam  =  B1
+[02:32:32] dm  =  0
+[02:32:32] if3freq  =  [0]
+[02:32:32] subband  =  1
+[02:32:32] polswitch  =  thru
+[02:32:32] Configuring for backend VEGAS...
+[02:32:32] The bad devices are: 
+[02:32:32] ConverterFilter14
+[02:32:32] ConverterFilter2
+[02:32:32] ConverterFilter16
+[02:32:32] ConverterFilter10
+[02:32:32] ConverterFilter12
+[02:32:32] The bad devices are: 
+[02:32:32] ConverterFilter14
+[02:32:32] ConverterFilter2
+[02:32:32] ConverterFilter16
+[02:32:32] ConverterFilter10
+[02:32:32] ConverterFilter12
+[02:32:32] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:32:32] BankH [400.0]
+[02:32:32] BankC [400.0]
+[02:32:32] BankB [400.0]
+[02:32:32] BankA [400.0]
+[02:32:32] BankG [400.0]
+[02:32:32] BankF [400.0]
+[02:32:32] BankE [400.0]
+[02:32:32] BankD [400.0]
+[02:32:32] Configuring for backend GUPPI...
+[02:32:32] The bad devices are: 
+[02:32:32] ConverterFilter14
+[02:32:32] ConverterFilter16
+[02:32:32] ConverterFilter2
+[02:32:32] ConverterFilter12
+[02:32:32] ConverterModule5
+[02:32:32] ConverterFilter10
+[02:32:32] ConverterModule1
+[02:32:32] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:32:32] Waiting for  GUPPI to finish activating
+[02:32:32] . . . . . . . . . . . . . . . . . . . . . .
+[02:32:32]  Finalizing VEGAS config...
+[02:32:32] Checking telescope
+[02:32:32] Configuration Complete
+[02:32:32] Balancing IF system.
+[02:32:32] Balancing IFRack
+[02:32:33]     Setting State: Ready
+[02:32:34] the sampler values are:
+[02:32:34] RF_power 1 : 0.9326172
+[02:32:34] RF_power 2 : 0.02929688
+[02:32:34] RF_power 3 : 1.015625
+[02:32:34] RF_power 4 : 0.01464844
+[02:32:34] RF_power 5 : 3.603516
+[02:32:34] RF_power 6 : 0.625
+[02:32:34] RF_power 7 : 3.178711
+[02:32:34] RF_power 8 : 0.1171875
+[02:32:35] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:32:35] Track: Subscan 1 of 1
+[02:32:35] In state Ready, waiting for state Running
+[02:32:35]     Setting State: Activating
+[02:32:36]     Setting State: Committed
+[02:33:02]     Setting State: Running
+[02:33:02] Detected state Running
+[02:33:02] *** Notice: This subscan will be numbered as scan #9 in your data reduction package.
+[02:33:02] In state Running, waiting for state Ready
+[02:34:34]     Setting State: Stopping
+[02:34:38]     Setting State: Ready
+[02:34:38] Detected state Ready
+[02:34:38] Ygor Telescope: WaitForStopping
+[02:34:38] Configuring telescope.
+[02:34:38]     Setting State: Activating
+[02:35:00]     Setting State: Ready
+[02:35:01]     Setting State: Activating
+[02:35:02] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:35:02] Default values are
+[02:35:02] nchan  =  512
+[02:35:02] beam  =  B1
+[02:35:02] dm  =  0
+[02:35:02] if3freq  =  [0]
+[02:35:02] subband  =  1
+[02:35:02] polswitch  =  thru
+[02:35:02] Configuring for backend VEGAS...
+[02:35:02] The bad devices are: 
+[02:35:02] ConverterFilter14
+[02:35:02] ConverterFilter2
+[02:35:02] ConverterFilter16
+[02:35:02] ConverterFilter10
+[02:35:02] ConverterFilter12
+[02:35:02] The bad devices are: 
+[02:35:02] ConverterFilter14
+[02:35:02] ConverterFilter2
+[02:35:02] ConverterFilter16
+[02:35:02] ConverterFilter10
+[02:35:02] ConverterFilter12
+[02:35:02] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:35:02] BankH [400.0]
+[02:35:02] BankC [400.0]
+[02:35:02] BankB [400.0]
+[02:35:02] BankA [400.0]
+[02:35:02] BankG [400.0]
+[02:35:02] BankF [400.0]
+[02:35:02] BankE [400.0]
+[02:35:02] BankD [400.0]
+[02:35:02] Configuring for backend GUPPI...
+[02:35:02] The bad devices are: 
+[02:35:02] ConverterFilter14
+[02:35:02] ConverterFilter16
+[02:35:02] ConverterFilter2
+[02:35:02] ConverterFilter12
+[02:35:02] ConverterModule5
+[02:35:02] ConverterFilter10
+[02:35:02] ConverterModule1
+[02:35:02] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:35:02] Waiting for  GUPPI to finish activating
+[02:35:02] . . . . . . . . . . . . . . . . . . . . . .
+[02:35:02]  Finalizing VEGAS config...
+[02:35:02] Checking telescope
+[02:35:02] Configuration Complete
+[02:35:02] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:35:02] Track: Subscan 1 of 1
+[02:35:03] In state Activating, waiting for state Running
+[02:35:03]     Setting State: Committed
+[02:35:09]     Setting State: Running
+[02:35:09] Detected state Running
+[02:35:09] *** Notice: This subscan will be numbered as scan #10 in your data reduction package.
+[02:35:09] In state Running, waiting for state Ready
+[02:36:13]     Setting State: Aborting
+[02:36:13] ygor.Telescope: RuntimeError msg: Abort detected!
+[02:36:13] ygor.Telescope: WaitForRunning: Asking abort confirmation.
+[02:36:13] 
+[02:36:13] User queried: "Abort detected! Terminate block?" waiting for reply...
+[02:36:15] User replied: "Yes".
+[02:36:15] Exiting scheduling block.
+[02:36:15]     Setting State: Ready
+runSuccessful: False
+[02:36:15] ******** End Scheduling Block
+[02:36:15] ******** observer = Thankful Cromartie, SB name = nanograv_timing_vegas, project ID = AGBT18B_226
+
+how much log? 18473 id: 233572self.history: <gbt.turtle.database.History.History instance at 0x54bd950>self.history.connection: <gbt.turtle.database.TurtleConnection.TurtleConnection instance at 0x54bd6c8>how much converted log? 18760 
+#######################################################
+ 
+ 
+#######################################################
+ SCRIPT NUMBER 4, project:AGBT18B_226_143 
+ 233573 685 Thankful Cromartie 13 Tyler Hise 2019-09-01 02:36:21 obs_completed 
+#######################################################
+ResetConfig()
+config_guppi = """
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+obstype = 'Pulsar'
+backend = 'GUPPI'
+pol = 'Linear'
+ifbw = 0
+bandwidth = 800
+tint  = 81.92e-6
+swmode = 'tp_nocal' # cals
+noisecal = 'off'  # 'lo' for cals
+swtype = 'none'
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+vframe = 'topo'
+vdef = 'Radio'
+guppi.obsmode = 'search'
+guppi.numchan = 512
+guppi.polnmode = 'total_intensity'
+guppi.scale = 5.0
+guppi.outbits = 8
+guppi.datadisk = 'data1'
+"""
+Configure(config_guppi)
+#######################################################
+ LOG SESSION NUMBER 4 
+[02:36:21] ******** Begin Scheduling Block
+[02:36:21] ******** observer = Thankful Cromartie, SB name = ResetConfig, project ID = AGBT18B_226, date = 01 Sep 2019
+
+[02:36:21] *** Notice:Resetting the configuration. You must run another configuration before running a scan
+[02:36:21] *** Notice:Resetting the configuration. You must run another configuration before running a scan
+[02:36:22] Configuring telescope.
+[02:36:22]     Setting State: Activating
+[02:36:43]     Setting State: Ready
+[02:36:45]     Setting State: Activating
+[02:36:46]     Setting State: Ready
+[02:36:46] Default values are
+[02:36:46] nchan  =  512
+[02:36:46] beam  =  B1
+[02:36:46] fold_dumptime  =  60
+[02:36:46] fold_bins  =  256
+[02:36:46] dm  =  0
+[02:36:46] if3freq  =  [0]
+[02:36:46] polswitch  =  thru
+[02:36:46] Configuring for backend GUPPI...
+[02:36:46] The bad devices are: 
+[02:36:46] ConverterFilter14
+[02:36:46] ConverterFilter2
+[02:36:46] ConverterFilter16
+[02:36:46] ConverterFilter10
+[02:36:46] ConverterFilter12
+[02:36:46] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:36:46] Waiting for  GUPPI to finish activating
+[02:36:46] . . . . . . . . . . . . . . . . . . . . .
+[02:36:46] Checking telescope
+[02:36:46] Configuration Complete
+runSuccessful: True
+[02:36:46] ******** End Scheduling Block
+[02:36:46] ******** observer = Thankful Cromartie, SB name = ResetConfig, project ID = AGBT18B_226
+
+how much log? 1452 id: 233573self.history: <gbt.turtle.database.History.History instance at 0x54bd950>self.history.connection: <gbt.turtle.database.TurtleConnection.TurtleConnection instance at 0x54bd6c8>how much converted log? 1656 
+#######################################################
+ 
+ 
+#######################################################
+ SCRIPT NUMBER 5, project:AGBT18B_226_143 
+ 233574 685 Thankful Cromartie 13 Tyler Hise 2019-09-01 02:37:05 obs_aborted 
+#######################################################
+# NANOGrav timing astrid block, 2012/02 PBD
+# Modified for GUPPI + VEGAS, 2018/03 KS
+
+# IMPORTANT!  Edit this to pick which band you're observing#
+#band = '820'
+band = 'L'
+#band = 'S'
+
+# IMPORTANT!  Edit this to pick which session you're observing
+# All sources in the catalog will be observed in order, with the 
+# remaining session time divided evenly between them. To 
+# restart a interrupted session, first edit the catalog and comment
+# out sources that have already been observed today.
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_A.cat")
+srcs = Catalog("/users/pdemores/sched/18B226_2018_session_B.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_C.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_D.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_E.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_F.cat")
+#Use personal catalog file, rather than editing Paul's files:
+#srcs = Catalog("/users/amcewen/18B226_2018_session_F.cat")
+
+# IMPORTANT!  Edit here to set the session's start/stop times in UTC!
+# NOTES:
+#  - start time does not need to be edited if the script is stopped/restarted.
+#    it will always use the current time when running 'for real'.
+#  - don't use any leading 0's in the values here, (leading 0 is code for
+#    octal).
+from mx import DateTime
+# Function args are year, month, day, hour (24 hr), min, sec (UTC)
+sess_start_time = DateTime.DateTime(2019,9,1,00,30,0) # UTC
+sess_stop_time = DateTime.DateTime(2019,9,1,03,30,0) # UTC
+
+# Use fixed start time rather than current time.
+fix = False
+
+############## You should not need to edit below this line ###########
+
+execfile("/users/pdemores/config/astrid_utils.py")
+#execfile("/users/pdemores/config/astrid_cals.py")
+
+if Now() != None and not fix:
+    print "Using current time for session start"
+    sess_start_time = Now()
+sess_len = float(sess_stop_time - sess_start_time) / 3600.0
+print "Session time remaining = %.1fh" % sess_len
+
+nsrc = len(srcs.keys())
+print "nsrc = %d" % (nsrc)
+time_per_src = sess_len / float(nsrc) # hours
+print "time_per_src = %.1f min" % (time_per_src * 60.0)
+stop_time = {}
+start_time = {}
+i = 0
+for s in srcs.keys():
+    stop_time[s] = sess_start_time + float(i+1) * time_per_src / 24.0
+    start_time[s] = sess_start_time + float(i) * time_per_src / 24.0
+    i += 1
+    print "  Src '%s' start:%s, stop:%s" % (s, start_time[s], stop_time[s])
+
+# Config items common to all obs
+config_common = """
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+"""
+
+# Config items common to L-band obs
+config_Lband_common="""
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to 820 obs
+config_820_common="""
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+vegas.numchan = 128
+vegas.polnmode = 'full_stokes'
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to S-band obs
+config_Sband_common="""
+receiver = 'Rcvr2_3'
+restfreq = 2000.0
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config for cal mode
+config_cal = """
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+"""
+
+# Config for psr fold mode.
+# Note the '%s' for parfile that needs to be filled in when using this.
+config_psr = """
+vegas.obsmode = 'coherent_fold'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+vegas.fold_parfile = '%s'
+swmode = 'tp_nocal'
+noisecal = 'off'
+"""
+
+# Check observing band
+if (band == '820'):
+   #config_common = config_common.replace("VEGAS/GUPPI","GUPPI")
+   #config_common = config_common.replace("vegas","guppi")
+   #config_820_common = config_820_common.replace("vegas.scale = 1015","")
+   #config_820_common = config_820_common.replace("vegas","guppi")
+   config0 = config_common + config_820_common
+   #config_cal = config_cal.replace("vegas","guppi")
+   #config_psr = config_psr.replace("vegas","guppi")
+elif (band== 'L'):
+   config0 = config_common + config_Lband_common
+elif (band=='S'):
+   config0 = config_common + config_Sband_common
+else:
+    Break("Invalid band ('%s') selected!" % band)
+
+# Figure out what source to start on
+#if start_src == None:
+start_src = None
+
+if True:
+    cur_time = Now()
+    for s in srcs.keys():
+        if (cur_time < stop_time[s]):
+            start_src = s
+            break
+
+# Initial slew, config, balance
+print config0
+print "First source: %s" % start_src
+Configure(config0 + config_cal)
+SetValues("DCR",{"state":"prepare"})
+Slew(start_src)
+Balance()
+Balance("VEGAS")
+# Note: use these for 820 recvr 2013/05/19
+#Balance("IFRack")
+#Balance("GUPPI")
+Break("Check GUPPI levels now.")
+
+# 2013/06/06 - route to vegas bank A for Glenn's stuff
+#SetValues("ConverterRack",{"CMInput,1":"A"})
+#SetValues("ConverterRack",{"CMInput,5":"A"})
+#if (band=='820'):
+#    SetValues("ConverterRack",{"Gfrequency,1":11068})
+#elif (band=='L'):
+#    #SetValues("ConverterRack",{"Gfrequency,1":13088})
+#    SetValues("ConverterRack",{"Gfrequency,1":13288})
+#SetValues("ConverterRack",{"CMAttenuator1":22.0})
+#SetValues("ConverterRack",{"CMAttenuator5":22.0})
+#SetValues("ConverterRack",{"CMOutput,1":3})
+#SetValues("ConverterRack",{"CMOutput,5":3})
+#SetValues("ConverterRack",{"state":"prepare"})
+
+# Main observing loop
+first=1
+for s in srcs.keys():
+    if (first and s!=start_src):
+        continue
+    first=0;
+    print "Starting '%s'" % s
+    alias = "%4.4d" % srcs[s]["alias"]
+    parfile = "/users/pdemores/tzpar/%s.par" % s
+    print parfile
+    Slew(s)
+    print "############## HERE ##################"
+    print config0+config_cal
+    Configure(config0 + config_cal)
+    SetValues("DCR",{"state":"prepare"})
+    Balance("IFRack")
+    # Regular PSR observing
+    Track(s, None, 90.0) # Cal scan
+    Configure(config0 + config_psr % parfile)
+    Track(s, None, stopTime=stop_time[s])
+
+#######################################################
+ LOG SESSION NUMBER 5 
+[02:37:05] ******** Begin Scheduling Block
+[02:37:05] ******** observer = Thankful Cromartie, SB name = nanograv_timing_vegas, project ID = AGBT18B_226, date = 01 Sep 2019
+
+[02:37:05] Using current time for session start
+[02:37:05] Session time remaining = 0.9h
+[02:37:05] nsrc = 2
+[02:37:05] time_per_src = 26.5 min
+[02:37:05]   Src 'J2150-0326' start:2019-09-01 02:37:05.22, stop:2019-09-01 03:03:32.61
+[02:37:05]   Src 'J0740+6620' start:2019-09-01 03:03:32.61, stop:2019-09-01 03:30:00.00
+[02:37:05] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+[02:37:05] First source: J2150-0326
+[02:37:05] Configuring telescope.
+[02:37:05]     Setting State: Activating
+[02:37:32]     Setting State: Ready
+[02:37:33]     Setting State: Activating
+[02:37:34] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:37:34] Default values are
+[02:37:34] nchan  =  512
+[02:37:34] beam  =  B1
+[02:37:34] dm  =  0
+[02:37:34] if3freq  =  [0]
+[02:37:34] subband  =  1
+[02:37:34] fold_parfile  =  
+[02:37:34] polswitch  =  thru
+[02:37:34] Configuring for backend VEGAS...
+[02:37:34] The bad devices are: 
+[02:37:34] ConverterFilter14
+[02:37:34] ConverterFilter2
+[02:37:34] ConverterFilter16
+[02:37:34] ConverterFilter10
+[02:37:34] ConverterFilter12
+[02:37:34] The bad devices are: 
+[02:37:34] ConverterFilter14
+[02:37:34] ConverterFilter2
+[02:37:34] ConverterFilter16
+[02:37:34] ConverterFilter10
+[02:37:34] ConverterFilter12
+[02:37:34] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:37:34] BankH [400.0]
+[02:37:34] BankC [400.0]
+[02:37:34] BankB [400.0]
+[02:37:34] BankA [400.0]
+[02:37:34] BankG [400.0]
+[02:37:34] BankF [400.0]
+[02:37:34] BankE [400.0]
+[02:37:34] BankD [400.0]
+[02:37:34] Configuring for backend GUPPI...
+[02:37:34] The bad devices are: 
+[02:37:34] ConverterFilter14
+[02:37:34] ConverterFilter16
+[02:37:34] ConverterFilter2
+[02:37:34] ConverterFilter12
+[02:37:34] ConverterModule5
+[02:37:34] ConverterFilter10
+[02:37:34] ConverterModule1
+[02:37:34] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:37:34] Waiting for  GUPPI to finish activating
+[02:37:34] . . . . . . . . . . . . . . . . . . . . . . . . . . .
+[02:37:34]  Finalizing VEGAS config...
+[02:37:34] Checking telescope
+[02:37:34] Configuration Complete
+[02:37:34] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:37:35] Slewing to source.
+[02:37:35] In state Activating, waiting for state Activating
+[02:37:35] Detected state Activating
+[02:37:35] In state Activating, waiting for state Ready
+[02:37:44]     Setting State: Ready
+[02:37:44] Detected state Ready
+[02:37:44] Balancing IF system.
+[02:37:44] Balancing IFRack
+[02:37:44]     Setting State: Activating
+[02:37:44]     Setting State: Ready
+[02:37:46] the sampler values are:
+[02:37:46] RF_power 1 : 1.000977
+[02:37:46] RF_power 2 : 0.02441406
+[02:37:46] RF_power 3 : 1.083984
+[02:37:46] RF_power 4 : 0.01953125
+[02:37:46] RF_power 5 : 3.876953
+[02:37:46] RF_power 6 : 0.7421875
+[02:37:46] RF_power 7 : 3.149414
+[02:37:46] RF_power 8 : 0.1416016
+[02:37:46] Balancing Guppi
+[02:37:46]     Setting State: Activating
+[02:37:46]     Setting State: Ready
+[02:37:46]     Setting State: Activating
+[02:37:46]     Setting State: Ready
+[02:37:47] Filter 8 RF power =
+[02:37:47] 2.36328125
+[02:37:47] Filter 4 RF power =
+[02:37:47] 1.7431640625
+[02:37:47]     Setting State: Activating
+[02:37:47]     Setting State: Ready
+[02:37:47]     Setting State: Activating
+[02:37:47]     Setting State: Ready
+[02:37:48] Balancing IF system.
+[02:37:48] Balancing VEGAS
+[02:37:48]     Setting State: Activating
+[02:37:48]     Setting State: Ready
+[02:37:48]     Setting State: Activating
+[02:37:48]     Setting State: Ready
+[02:37:49]     Setting State: Activating
+[02:37:49]     Setting State: Ready
+[02:37:49]     Setting State: Activating
+[02:37:49]     Setting State: Ready
+[02:37:50] 
+[02:37:50] User queried: "Check GUPPI levels now. - Continue scheduling block?" waiting for reply...
+[02:37:53] User replied: "Yes".
+[02:37:53] Starting 'J2150-0326'
+[02:37:53] /users/pdemores/tzpar/J2150-0326.par
+[02:37:53] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:37:53] Slewing to source.
+[02:37:53] In state Ready, waiting for state Activating
+[02:37:53]     Setting State: Activating
+[02:37:53] Detected state Activating
+[02:37:53] In state Activating, waiting for state Ready
+[02:37:55]     Setting State: Ready
+[02:37:55] Detected state Ready
+[02:37:55] ############## HERE ##################
+[02:37:55] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[02:37:55] Configuring telescope.
+[02:37:55]     Setting State: Activating
+[02:38:17]     Setting State: Ready
+[02:38:19]     Setting State: Activating
+[02:38:20] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:38:20] Default values are
+[02:38:20] nchan  =  512
+[02:38:20] beam  =  B1
+[02:38:20] dm  =  0
+[02:38:20] if3freq  =  [0]
+[02:38:20] subband  =  1
+[02:38:20] fold_parfile  =  
+[02:38:20] polswitch  =  thru
+[02:38:20] Configuring for backend VEGAS...
+[02:38:20] The bad devices are: 
+[02:38:20] ConverterFilter14
+[02:38:20] ConverterFilter2
+[02:38:20] ConverterFilter16
+[02:38:20] ConverterFilter10
+[02:38:20] ConverterFilter12
+[02:38:20] The bad devices are: 
+[02:38:20] ConverterFilter14
+[02:38:20] ConverterFilter2
+[02:38:20] ConverterFilter16
+[02:38:20] ConverterFilter10
+[02:38:20] ConverterFilter12
+[02:38:20] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:38:20] BankH [400.0]
+[02:38:20] BankC [400.0]
+[02:38:20] BankB [400.0]
+[02:38:20] BankA [400.0]
+[02:38:20] BankG [400.0]
+[02:38:20] BankF [400.0]
+[02:38:20] BankE [400.0]
+[02:38:20] BankD [400.0]
+[02:38:20] Configuring for backend GUPPI...
+[02:38:20] The bad devices are: 
+[02:38:20] ConverterFilter14
+[02:38:20] ConverterFilter16
+[02:38:20] ConverterFilter2
+[02:38:20] ConverterFilter12
+[02:38:20] ConverterModule5
+[02:38:20] ConverterFilter10
+[02:38:20] ConverterModule1
+[02:38:20] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:38:20] Waiting for  GUPPI to finish activating
+[02:38:20] . . . . . . . . . . . . . . . . . . . . . .
+[02:38:20]  Finalizing VEGAS config...
+[02:38:20] Checking telescope
+[02:38:20] Configuration Complete
+[02:38:20] Balancing IF system.
+[02:38:20] Balancing IFRack
+[02:38:20]     Setting State: Ready
+[02:38:20]     Setting State: Activating
+[02:38:22]     Setting State: Ready
+[02:38:22] the sampler values are:
+[02:38:22] RF_power 1 : 0.9472656
+[02:38:22] RF_power 2 : 0.02929688
+[02:38:22] RF_power 3 : 1.108398
+[02:38:22] RF_power 4 : 0.01953125
+[02:38:22] RF_power 5 : 3.901367
+[02:38:22] RF_power 6 : 0.7519531
+[02:38:22] RF_power 7 : 3.178711
+[02:38:22] RF_power 8 : 0.1464844
+[02:38:23] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:38:23] Track: Subscan 1 of 1
+[02:38:23] In state Ready, waiting for state Running
+[02:38:23]     Setting State: Activating
+[02:38:24]     Setting State: Committed
+[02:38:50]     Setting State: Running
+[02:38:50] Detected state Running
+[02:38:50] *** Notice: This subscan will be numbered as scan #11 in your data reduction package.
+[02:38:50] In state Running, waiting for state Ready
+[02:40:22]     Setting State: Stopping
+[02:40:26]     Setting State: Ready
+[02:40:26] Detected state Ready
+[02:40:26] Ygor Telescope: WaitForStopping
+[02:40:26] Configuring telescope.
+[02:40:26]     Setting State: Activating
+[02:40:48]     Setting State: Ready
+[02:40:49]     Setting State: Activating
+[02:40:50] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:40:50] Default values are
+[02:40:50] nchan  =  512
+[02:40:50] beam  =  B1
+[02:40:50] dm  =  0
+[02:40:50] if3freq  =  [0]
+[02:40:50] subband  =  1
+[02:40:50] polswitch  =  thru
+[02:40:50] Configuring for backend VEGAS...
+[02:40:50] The bad devices are: 
+[02:40:50] ConverterFilter14
+[02:40:50] ConverterFilter2
+[02:40:50] ConverterFilter16
+[02:40:50] ConverterFilter10
+[02:40:50] ConverterFilter12
+[02:40:50] The bad devices are: 
+[02:40:50] ConverterFilter14
+[02:40:50] ConverterFilter2
+[02:40:50] ConverterFilter16
+[02:40:50] ConverterFilter10
+[02:40:50] ConverterFilter12
+[02:40:50] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:40:50] BankH [400.0]
+[02:40:50] BankC [400.0]
+[02:40:50] BankB [400.0]
+[02:40:50] BankA [400.0]
+[02:40:50] BankG [400.0]
+[02:40:50] BankF [400.0]
+[02:40:50] BankE [400.0]
+[02:40:50] BankD [400.0]
+[02:40:50] Configuring for backend GUPPI...
+[02:40:50] The bad devices are: 
+[02:40:50] ConverterFilter14
+[02:40:50] ConverterFilter16
+[02:40:50] ConverterFilter2
+[02:40:50] ConverterFilter12
+[02:40:50] ConverterModule5
+[02:40:50] ConverterFilter10
+[02:40:50] ConverterModule1
+[02:40:50] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:40:50] Waiting for  GUPPI to finish activating
+[02:40:50] . . . . . . . . . . . . . . . . . . . . . .
+[02:40:50]  Finalizing VEGAS config...
+[02:40:50] Checking telescope
+[02:40:50] Configuration Complete
+[02:40:51] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:40:51] Track: Subscan 1 of 1
+[02:40:51]     Setting State: Ready
+[02:40:51] In state Ready, waiting for state Running
+[02:40:51]     Setting State: Activating
+[02:40:51]     Setting State: Committed
+[02:40:57]     Setting State: Running
+[02:40:57] Detected state Running
+[02:40:57] *** Notice: This subscan will be numbered as scan #12 in your data reduction package.
+[02:40:57] In state Running, waiting for state Ready
+[02:44:00]     Setting State: Aborting
+[02:44:00] ygor.Telescope: RuntimeError msg: Abort detected!
+[02:44:00] ygor.Telescope: WaitForRunning: Asking abort confirmation.
+[02:44:00] 
+[02:44:00] User queried: "Abort detected! Terminate block?" waiting for reply...
+[02:44:02] User replied: "Yes".
+[02:44:02]     Setting State: Ready
+[02:44:02] Exiting scheduling block.
+runSuccessful: False
+[02:44:02] ******** End Scheduling Block
+[02:44:02] ******** observer = Thankful Cromartie, SB name = nanograv_timing_vegas, project ID = AGBT18B_226
+
+how much log? 11916 id: 233574self.history: <gbt.turtle.database.History.History instance at 0x54bd950>self.history.connection: <gbt.turtle.database.TurtleConnection.TurtleConnection instance at 0x54bd6c8>how much converted log? 12173 
+#######################################################
+ 
+ 
+#######################################################
+ SCRIPT NUMBER 6, project:AGBT18B_226_143 
+ 233575 685 Thankful Cromartie 13 Tyler Hise 2019-09-01 02:50:34 obs_completed 
+#######################################################
+# NANOGrav timing astrid block, 2012/02 PBD
+# Modified for GUPPI + VEGAS, 2018/03 KS
+
+# IMPORTANT!  Edit this to pick which band you're observing#
+#band = '820'
+band = 'L'
+#band = 'S'
+
+# IMPORTANT!  Edit this to pick which session you're observing
+# All sources in the catalog will be observed in order, with the 
+# remaining session time divided evenly between them. To 
+# restart a interrupted session, first edit the catalog and comment
+# out sources that have already been observed today.
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_A.cat")
+srcs = Catalog("/users/pdemores/sched/18B226_2018_session_B.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_C.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_D.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_E.cat")
+#srcs = Catalog("/users/pdemores/sched/18B226_2018_session_F.cat")
+#Use personal catalog file, rather than editing Paul's files:
+#srcs = Catalog("/users/amcewen/18B226_2018_session_F.cat")
+
+# IMPORTANT!  Edit here to set the session's start/stop times in UTC!
+# NOTES:
+#  - start time does not need to be edited if the script is stopped/restarted.
+#    it will always use the current time when running 'for real'.
+#  - don't use any leading 0's in the values here, (leading 0 is code for
+#    octal).
+from mx import DateTime
+# Function args are year, month, day, hour (24 hr), min, sec (UTC)
+sess_start_time = DateTime.DateTime(2019,9,1,00,30,0) # UTC
+sess_stop_time = DateTime.DateTime(2019,9,1,03,30,0) # UTC
+
+# Use fixed start time rather than current time.
+fix = False
+
+############## You should not need to edit below this line ###########
+
+execfile("/users/pdemores/config/astrid_utils.py")
+#execfile("/users/pdemores/config/astrid_cals.py")
+
+if Now() != None and not fix:
+    print "Using current time for session start"
+    sess_start_time = Now()
+sess_len = float(sess_stop_time - sess_start_time) / 3600.0
+print "Session time remaining = %.1fh" % sess_len
+
+nsrc = len(srcs.keys())
+print "nsrc = %d" % (nsrc)
+time_per_src = sess_len / float(nsrc) # hours
+print "time_per_src = %.1f min" % (time_per_src * 60.0)
+stop_time = {}
+start_time = {}
+i = 0
+for s in srcs.keys():
+    stop_time[s] = sess_start_time + float(i+1) * time_per_src / 24.0
+    start_time[s] = sess_start_time + float(i) * time_per_src / 24.0
+    i += 1
+    print "  Src '%s' start:%s, stop:%s" % (s, start_time[s], stop_time[s])
+
+# Config items common to all obs
+config_common = """
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+"""
+
+# Config items common to L-band obs
+config_Lband_common="""
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to 820 obs
+config_820_common="""
+receiver = 'Rcvr_800'
+restfreq = 820.0
+bandwidth = 200
+vegas.numchan = 128
+vegas.polnmode = 'full_stokes'
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config items common to S-band obs
+config_Sband_common="""
+receiver = 'Rcvr2_3'
+restfreq = 2000.0
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+"""
+
+# Config for cal mode
+config_cal = """
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+"""
+
+# Config for psr fold mode.
+# Note the '%s' for parfile that needs to be filled in when using this.
+config_psr = """
+vegas.obsmode = 'coherent_fold'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+vegas.fold_parfile = '%s'
+swmode = 'tp_nocal'
+noisecal = 'off'
+"""
+
+# Check observing band
+if (band == '820'):
+   #config_common = config_common.replace("VEGAS/GUPPI","GUPPI")
+   #config_common = config_common.replace("vegas","guppi")
+   #config_820_common = config_820_common.replace("vegas.scale = 1015","")
+   #config_820_common = config_820_common.replace("vegas","guppi")
+   config0 = config_common + config_820_common
+   #config_cal = config_cal.replace("vegas","guppi")
+   #config_psr = config_psr.replace("vegas","guppi")
+elif (band== 'L'):
+   config0 = config_common + config_Lband_common
+elif (band=='S'):
+   config0 = config_common + config_Sband_common
+else:
+    Break("Invalid band ('%s') selected!" % band)
+
+# Figure out what source to start on
+#if start_src == None:
+start_src = None
+
+if True:
+    cur_time = Now()
+    for s in srcs.keys():
+        if (cur_time < stop_time[s]):
+            start_src = s
+            break
+
+# Initial slew, config, balance
+print config0
+print "First source: %s" % start_src
+Configure(config0 + config_cal)
+SetValues("DCR",{"state":"prepare"})
+Slew(start_src)
+Balance()
+Balance("VEGAS")
+# Note: use these for 820 recvr 2013/05/19
+#Balance("IFRack")
+#Balance("GUPPI")
+Break("Check GUPPI levels now.")
+
+# 2013/06/06 - route to vegas bank A for Glenn's stuff
+#SetValues("ConverterRack",{"CMInput,1":"A"})
+#SetValues("ConverterRack",{"CMInput,5":"A"})
+#if (band=='820'):
+#    SetValues("ConverterRack",{"Gfrequency,1":11068})
+#elif (band=='L'):
+#    #SetValues("ConverterRack",{"Gfrequency,1":13088})
+#    SetValues("ConverterRack",{"Gfrequency,1":13288})
+#SetValues("ConverterRack",{"CMAttenuator1":22.0})
+#SetValues("ConverterRack",{"CMAttenuator5":22.0})
+#SetValues("ConverterRack",{"CMOutput,1":3})
+#SetValues("ConverterRack",{"CMOutput,5":3})
+#SetValues("ConverterRack",{"state":"prepare"})
+
+# Main observing loop
+first=1
+for s in srcs.keys():
+    if (first and s!=start_src):
+        continue
+    first=0;
+    print "Starting '%s'" % s
+    alias = "%4.4d" % srcs[s]["alias"]
+    parfile = "/users/pdemores/tzpar/%s.par" % s
+    print parfile
+    Slew(s)
+    print "############## HERE ##################"
+    print config0+config_cal
+    Configure(config0 + config_cal)
+    SetValues("DCR",{"state":"prepare"})
+    Balance("IFRack")
+    # Regular PSR observing
+    Track(s, None, 90.0) # Cal scan
+    Configure(config0 + config_psr % parfile)
+    Track(s, None, stopTime=stop_time[s])
+
+#######################################################
+ LOG SESSION NUMBER 6 
+[02:50:34] ******** Begin Scheduling Block
+[02:50:34] ******** observer = Thankful Cromartie, SB name = nanograv_timing_vegas, project ID = AGBT18B_226, date = 01 Sep 2019
+
+[02:50:34] Using current time for session start
+[02:50:34] Session time remaining = 0.7h
+[02:50:34] nsrc = 2
+[02:50:34] time_per_src = 19.7 min
+[02:50:34]   Src 'J2150-0326' start:2019-09-01 02:50:34.14, stop:2019-09-01 03:10:17.07
+[02:50:34]   Src 'J0740+6620' start:2019-09-01 03:10:17.07, stop:2019-09-01 03:30:00.00
+[02:50:34] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+[02:50:34] First source: J2150-0326
+[02:50:34] Configuring telescope.
+[02:50:34]     Setting State: Activating
+[02:50:55]     Setting State: Ready
+[02:50:57]     Setting State: Activating
+[02:50:58] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:50:58] Default values are
+[02:50:58] nchan  =  512
+[02:50:58] beam  =  B1
+[02:50:58] dm  =  0
+[02:50:58] if3freq  =  [0]
+[02:50:58] subband  =  1
+[02:50:58] polswitch  =  thru
+[02:50:58] Configuring for backend VEGAS...
+[02:50:58] The bad devices are: 
+[02:50:58] ConverterFilter14
+[02:50:58] ConverterFilter2
+[02:50:58] ConverterFilter16
+[02:50:58] ConverterFilter10
+[02:50:58] ConverterFilter12
+[02:50:58] The bad devices are: 
+[02:50:58] ConverterFilter14
+[02:50:58] ConverterFilter2
+[02:50:58] ConverterFilter16
+[02:50:58] ConverterFilter10
+[02:50:58] ConverterFilter12
+[02:50:58] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:50:58] BankH [400.0]
+[02:50:58] BankC [400.0]
+[02:50:58] BankB [400.0]
+[02:50:58] BankA [400.0]
+[02:50:58] BankG [400.0]
+[02:50:58] BankF [400.0]
+[02:50:58] BankE [400.0]
+[02:50:58] BankD [400.0]
+[02:50:58] Configuring for backend GUPPI...
+[02:50:58] The bad devices are: 
+[02:50:58] ConverterFilter14
+[02:50:58] ConverterFilter16
+[02:50:58] ConverterFilter2
+[02:50:58] ConverterFilter12
+[02:50:58] ConverterModule5
+[02:50:58] ConverterFilter10
+[02:50:58] ConverterModule1
+[02:50:58] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:50:58] Waiting for  GUPPI to finish activating
+[02:50:58] . . . . . . . . . . . . . . . . . . . . . .
+[02:50:58]  Finalizing VEGAS config...
+[02:50:58] Checking telescope
+[02:50:58] Configuration Complete
+[02:50:58] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:50:58] Slewing to source.
+[02:50:59]     Setting State: Ready
+[02:50:59] In state Ready, waiting for state Activating
+[02:50:59]     Setting State: Activating
+[02:50:59] Detected state Activating
+[02:50:59] In state Activating, waiting for state Ready
+[02:51:18]     Setting State: Ready
+[02:51:18] Detected state Ready
+[02:51:18] Balancing IF system.
+[02:51:18] Balancing IFRack
+[02:51:19]     Setting State: Activating
+[02:51:19]     Setting State: Ready
+[02:51:20] the sampler values are:
+[02:51:20] RF_power 1 : 0.9570312
+[02:51:20] RF_power 2 : 0.02929688
+[02:51:20] RF_power 3 : 1.083984
+[02:51:20] RF_power 4 : 0.01464844
+[02:51:20] RF_power 5 : 4.414062
+[02:51:20] RF_power 6 : 0.8251953
+[02:51:20] RF_power 7 : 3.876953
+[02:51:20] RF_power 8 : 0.1416016
+[02:51:20] Balancing Guppi
+[02:51:20]     Setting State: Activating
+[02:51:20]     Setting State: Ready
+[02:51:21] Filter 8 RF power =
+[02:51:21] 2.3779296875
+[02:51:21] Filter 4 RF power =
+[02:51:21] 1.6796875
+[02:51:21]     Setting State: Activating
+[02:51:21]     Setting State: Ready
+[02:51:21]     Setting State: Activating
+[02:51:21]     Setting State: Ready
+[02:51:22] Balancing IF system.
+[02:51:22] Balancing VEGAS
+[02:51:22]     Setting State: Activating
+[02:51:22]     Setting State: Ready
+[02:51:22]     Setting State: Activating
+[02:51:22]     Setting State: Ready
+[02:51:23]     Setting State: Activating
+[02:51:24]     Setting State: Ready
+[02:51:24]     Setting State: Activating
+[02:51:24]     Setting State: Ready
+[02:51:24] 
+[02:51:24] User queried: "Check GUPPI levels now. - Continue scheduling block?" waiting for reply...
+[02:52:06] User replied: "Yes".
+[02:52:06] Starting 'J2150-0326'
+[02:52:06] /users/pdemores/tzpar/J2150-0326.par
+[02:52:06] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:52:06] Slewing to source.
+[02:52:06] In state Ready, waiting for state Activating
+[02:52:06]     Setting State: Activating
+[02:52:06] Detected state Activating
+[02:52:06] In state Activating, waiting for state Ready
+[02:52:08]     Setting State: Ready
+[02:52:08] Detected state Ready
+[02:52:08] ############## HERE ##################
+[02:52:08] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[02:52:08] Configuring telescope.
+[02:52:09]     Setting State: Activating
+[02:52:30]     Setting State: Ready
+[02:52:32]     Setting State: Activating
+[02:52:33] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:52:33] Default values are
+[02:52:33] nchan  =  512
+[02:52:33] beam  =  B1
+[02:52:33] dm  =  0
+[02:52:33] if3freq  =  [0]
+[02:52:33] subband  =  1
+[02:52:33] polswitch  =  thru
+[02:52:33] Configuring for backend VEGAS...
+[02:52:33] The bad devices are: 
+[02:52:33] ConverterFilter14
+[02:52:33] ConverterFilter2
+[02:52:33] ConverterFilter16
+[02:52:33] ConverterFilter10
+[02:52:33] ConverterFilter12
+[02:52:33] The bad devices are: 
+[02:52:33] ConverterFilter14
+[02:52:33] ConverterFilter2
+[02:52:33] ConverterFilter16
+[02:52:33] ConverterFilter10
+[02:52:33] ConverterFilter12
+[02:52:33] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:52:33] BankH [400.0]
+[02:52:33] BankC [400.0]
+[02:52:33] BankB [400.0]
+[02:52:33] BankA [400.0]
+[02:52:33] BankG [400.0]
+[02:52:33] BankF [400.0]
+[02:52:33] BankE [400.0]
+[02:52:33] BankD [400.0]
+[02:52:33] Configuring for backend GUPPI...
+[02:52:33] The bad devices are: 
+[02:52:33] ConverterFilter14
+[02:52:33] ConverterFilter16
+[02:52:33] ConverterFilter2
+[02:52:33] ConverterFilter12
+[02:52:33] ConverterModule5
+[02:52:33] ConverterFilter10
+[02:52:33] ConverterModule1
+[02:52:33] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:52:33] Waiting for  GUPPI to finish activating
+[02:52:33] . . . . . . . . . . . . . . . . . . . . . .
+[02:52:33]  Finalizing VEGAS config...
+[02:52:33] Checking telescope
+[02:52:33] Configuration Complete
+[02:52:33] Balancing IF system.
+[02:52:33] Balancing IFRack
+[02:52:34]     Setting State: Ready
+[02:52:35] the sampler values are:
+[02:52:35] RF_power 1 : 0.8984375
+[02:52:35] RF_power 2 : 0.02929688
+[02:52:35] RF_power 3 : 1.074219
+[02:52:35] RF_power 4 : 0.01953125
+[02:52:35] RF_power 5 : 4.516602
+[02:52:35] RF_power 6 : 0.7373047
+[02:52:35] RF_power 7 : 4.09668
+[02:52:35] RF_power 8 : 0.1367188
+[02:52:36] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:52:36] Track: Subscan 1 of 1
+[02:52:37] In state Ready, waiting for state Running
+[02:52:37]     Setting State: Activating
+[02:52:37]     Setting State: Committed
+[02:53:03]     Setting State: Running
+[02:53:03] Detected state Running
+[02:53:03] *** Notice: This subscan will be numbered as scan #13 in your data reduction package.
+[02:53:03] In state Running, waiting for state Ready
+[02:54:35]     Setting State: Stopping
+[02:54:39]     Setting State: Ready
+[02:54:39] Detected state Ready
+[02:54:39] Ygor Telescope: WaitForStopping
+[02:54:39] Configuring telescope.
+[02:54:39]     Setting State: Activating
+[02:55:01]     Setting State: Ready
+[02:55:02]     Setting State: Activating
+[02:55:04] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[02:55:04] Default values are
+[02:55:04] nchan  =  512
+[02:55:04] beam  =  B1
+[02:55:04] dm  =  0
+[02:55:04] if3freq  =  [0]
+[02:55:04] subband  =  1
+[02:55:04] polswitch  =  thru
+[02:55:04] Configuring for backend VEGAS...
+[02:55:04] The bad devices are: 
+[02:55:04] ConverterFilter14
+[02:55:04] ConverterFilter2
+[02:55:04] ConverterFilter16
+[02:55:04] ConverterFilter10
+[02:55:04] ConverterFilter12
+[02:55:04] The bad devices are: 
+[02:55:04] ConverterFilter14
+[02:55:04] ConverterFilter2
+[02:55:04] ConverterFilter16
+[02:55:04] ConverterFilter10
+[02:55:04] ConverterFilter12
+[02:55:04] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:55:04] BankH [400.0]
+[02:55:04] BankC [400.0]
+[02:55:04] BankB [400.0]
+[02:55:04] BankA [400.0]
+[02:55:04] BankG [400.0]
+[02:55:04] BankF [400.0]
+[02:55:04] BankE [400.0]
+[02:55:04] BankD [400.0]
+[02:55:04] Configuring for backend GUPPI...
+[02:55:04] The bad devices are: 
+[02:55:04] ConverterFilter14
+[02:55:04] ConverterFilter16
+[02:55:04] ConverterFilter2
+[02:55:04] ConverterFilter12
+[02:55:04] ConverterModule5
+[02:55:04] ConverterFilter10
+[02:55:04] ConverterModule1
+[02:55:04] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[02:55:04] Waiting for  GUPPI to finish activating
+[02:55:04] . . . . . . . . . . . . . . . . . . . . . .
+[02:55:04]  Finalizing VEGAS config...
+[02:55:04] Checking telescope
+[02:55:04] Configuration Complete
+[02:55:04] source : J2150-0326
+               alias : 2150.0
+               jname : J2150-0326
+               location : J2000 @ (21:50:27.23, -03:26:32.80)
+[02:55:04] Track: Subscan 1 of 1
+[02:55:04]     Setting State: Ready
+[02:55:04] In state Ready, waiting for state Running
+[02:55:04]     Setting State: Activating
+[02:55:05]     Setting State: Committed
+[02:55:10]     Setting State: Running
+[02:55:10] Detected state Running
+[02:55:10] *** Notice: This subscan will be numbered as scan #14 in your data reduction package.
+[02:55:10] In state Running, waiting for state Ready
+[03:10:17]     Setting State: Stopping
+[03:10:21]     Setting State: Ready
+[03:10:21] Detected state Ready
+[03:10:21] Ygor Telescope: WaitForStopping
+[03:10:21] Starting 'J0740+6620'
+[03:10:21] /users/pdemores/tzpar/J0740+6620.par
+[03:10:21] source : J0740+6620
+               alias : 740.0
+               jname : J0740+6620
+               location : J2000 @ (07:40:45.80, 66:20:33.60)
+[03:10:22] Slewing to source.
+[03:10:22] In state Ready, waiting for state Activating
+[03:10:22]     Setting State: Activating
+[03:10:22] Detected state Activating
+[03:10:22] In state Activating, waiting for state Ready
+[03:14:50]     Setting State: Ready
+[03:14:50] Detected state Ready
+[03:14:50] ############## HERE ##################
+[03:14:50] 
+obstype = 'Pulsar'
+backend = 'VEGAS/GUPPI'
+pol = 'Linear'
+ifbw = 0
+tint = 10.24e-6 # Note, not actually used in coherent fold modes
+swtype = 'none'
+
+swper = 0.04
+swfreq = 0.0, 0.0
+nwin = 1
+deltafreq = 0
+vlow = 0
+vhigh = 0
+g.vframe = 'topo'
+vdef = 'Radio'
+vegas.obstype = 'fold'
+vegas.polnmode = 'full_stokes'
+vegas.outbits = 8
+guppi.datadisk = 'data1'
+
+receiver = 'Rcvr1_2'
+restfreq = 1500.0
+notchfilter = "Out"
+bandwidth = 800
+vegas.numchan = 512
+vegas.scale = 1015
+guppi.scale = 0.125
+
+vegas.obsmode = 'coherent_cal'
+vegas.fold_dumptime = 10.0
+vegas.fold_bins = 2048
+swmode = 'tp'
+noisecal = 'lo'
+
+[03:14:51] Configuring telescope.
+[03:14:51]     Setting State: Activating
+[03:15:13]     Setting State: Ready
+[03:15:14]     Setting State: Activating
+[03:15:15] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[03:15:15] Default values are
+[03:15:15] nchan  =  512
+[03:15:15] beam  =  B1
+[03:15:15] dm  =  0
+[03:15:15] if3freq  =  [0]
+[03:15:15] subband  =  1
+[03:15:15] polswitch  =  thru
+[03:15:15] Configuring for backend VEGAS...
+[03:15:15] The bad devices are: 
+[03:15:15] ConverterFilter14
+[03:15:15] ConverterFilter2
+[03:15:15] ConverterFilter16
+[03:15:15] ConverterFilter10
+[03:15:15] ConverterFilter12
+[03:15:15] The bad devices are: 
+[03:15:15] ConverterFilter14
+[03:15:15] ConverterFilter2
+[03:15:15] ConverterFilter16
+[03:15:15] ConverterFilter10
+[03:15:15] ConverterFilter12
+[03:15:15] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[03:15:15] BankH [400.0]
+[03:15:15] BankC [400.0]
+[03:15:15] BankB [400.0]
+[03:15:15] BankA [400.0]
+[03:15:15] BankG [400.0]
+[03:15:15] BankF [400.0]
+[03:15:15] BankE [400.0]
+[03:15:15] BankD [400.0]
+[03:15:15] Configuring for backend GUPPI...
+[03:15:15] The bad devices are: 
+[03:15:15] ConverterFilter14
+[03:15:15] ConverterFilter16
+[03:15:15] ConverterFilter2
+[03:15:15] ConverterFilter12
+[03:15:15] ConverterModule5
+[03:15:15] ConverterFilter10
+[03:15:15] ConverterModule1
+[03:15:15] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[03:15:15] Waiting for  GUPPI to finish activating
+[03:15:15] . . . . . . . . . . . . . . . . . . . . . .
+[03:15:15]  Finalizing VEGAS config...
+[03:15:15] Checking telescope
+[03:15:15] Configuration Complete
+[03:15:16] Balancing IF system.
+[03:15:16] Balancing IFRack
+[03:15:17]     Setting State: Ready
+[03:15:18] the sampler values are:
+[03:15:18] RF_power 1 : 0.8935547
+[03:15:18] RF_power 2 : 0.02929688
+[03:15:18] RF_power 3 : 1.020508
+[03:15:18] RF_power 4 : 0.01464844
+[03:15:18] RF_power 5 : 4.208984
+[03:15:18] RF_power 6 : 0.7324219
+[03:15:18] RF_power 7 : 3.857422
+[03:15:18] RF_power 8 : 0.1269531
+[03:15:19] source : J0740+6620
+               alias : 740.0
+               jname : J0740+6620
+               location : J2000 @ (07:40:45.80, 66:20:33.60)
+[03:15:19] Track: Subscan 1 of 1
+[03:15:19] In state Ready, waiting for state Running
+[03:15:19]     Setting State: Activating
+[03:15:19]     Setting State: Committed
+[03:15:45]     Setting State: Running
+[03:15:45] Detected state Running
+[03:15:45] *** Notice: This subscan will be numbered as scan #15 in your data reduction package.
+[03:15:45] In state Running, waiting for state Ready
+[03:17:17]     Setting State: Stopping
+[03:18:22]     Setting State: Ready
+[03:18:22] Detected state Ready
+[03:18:22] Ygor Telescope: WaitForStopping
+[03:18:22] Configuring telescope.
+[03:18:23]     Setting State: Activating
+[03:18:44]     Setting State: Ready
+[03:18:46]     Setting State: Activating
+[03:18:47] Warning: (Data generated using this configuration can NOT be reduced using GBTIDL. If GBTIDL is required, change the integration time(s) to a integral number of switch periods.
+[03:18:47] Default values are
+[03:18:47] nchan  =  512
+[03:18:47] beam  =  B1
+[03:18:47] dm  =  0
+[03:18:47] if3freq  =  [0]
+[03:18:47] subband  =  1
+[03:18:47] polswitch  =  thru
+[03:18:47] Configuring for backend VEGAS...
+[03:18:47] The bad devices are: 
+[03:18:47] ConverterFilter14
+[03:18:47] ConverterFilter2
+[03:18:47] ConverterFilter16
+[03:18:47] ConverterFilter10
+[03:18:47] ConverterFilter12
+[03:18:47] The bad devices are: 
+[03:18:47] ConverterFilter14
+[03:18:47] ConverterFilter2
+[03:18:47] ConverterFilter16
+[03:18:47] ConverterFilter10
+[03:18:47] ConverterFilter12
+[03:18:47] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[03:18:47] BankH [400.0]
+[03:18:47] BankC [400.0]
+[03:18:47] BankB [400.0]
+[03:18:47] BankA [400.0]
+[03:18:47] BankG [400.0]
+[03:18:47] BankF [400.0]
+[03:18:47] BankE [400.0]
+[03:18:47] BankD [400.0]
+[03:18:47] Configuring for backend GUPPI...
+[03:18:47] The bad devices are: 
+[03:18:47] ConverterFilter14
+[03:18:47] ConverterFilter16
+[03:18:47] ConverterFilter2
+[03:18:47] ConverterFilter12
+[03:18:47] ConverterModule5
+[03:18:47] ConverterFilter10
+[03:18:47] ConverterModule1
+[03:18:47] Warning: Total bandwidth is greater than any receiver filter available:  Setting receiver filter to maximum
+[03:18:47] Waiting for  GUPPI to finish activating
+[03:18:47] . . . . . . . . . . . . . . . . . . . . . .
+[03:18:47]  Finalizing VEGAS config...
+[03:18:47] Checking telescope
+[03:18:47] Configuration Complete
+[03:18:47] source : J0740+6620
+               alias : 740.0
+               jname : J0740+6620
+               location : J2000 @ (07:40:45.80, 66:20:33.60)
+[03:18:47] Track: Subscan 1 of 1
+[03:18:47]     Setting State: Ready
+[03:18:48] In state Ready, waiting for state Running
+[03:18:48]     Setting State: Activating
+[03:18:48]     Setting State: Committed
+[03:18:54]     Setting State: Running
+[03:18:54] Detected state Running
+[03:18:54] *** Notice: This subscan will be numbered as scan #16 in your data reduction package.
+[03:18:54] In state Running, waiting for state Ready
+[03:30:00]     Setting State: Stopping
+[03:30:04]     Setting State: Ready
+[03:30:04] Detected state Ready
+[03:30:04] Ygor Telescope: WaitForStopping
+runSuccessful: True
+[03:30:04] ******** End Scheduling Block
+[03:30:04] ******** observer = Thankful Cromartie, SB name = nanograv_timing_vegas, project ID = AGBT18B_226
+
+how much log? 18241 id: 233575self.history: <gbt.turtle.database.History.History instance at 0x54bd950>self.history.connection: <gbt.turtle.database.TurtleConnection.TurtleConnection instance at 0x54bd6c8>how much converted log? 18526 
+#######################################################
