@@ -141,6 +141,7 @@ def main():
 
         if len(good_files) == 0:
             log_parser.logger.error("No files found")
+            sys.exit(1)
 
     else:
         good_files = args.file
@@ -153,6 +154,11 @@ def main():
                 file, start_line=start_line, tolerance=args.tolerance,
             )
             if log.start_time is None:
+                break
+            if log.end_line is None:
+                log_parser.logger.error(
+                    "parser returned end line of None while parsing %s", file
+                )
                 break
             start_line = log.end_line + 1
             logs.append(log)
@@ -190,7 +196,8 @@ def main():
                 % (response.status_code, response.text)
             )
         else:
-            log_parser.logger.info('Posted to slack')
+            log_parser.logger.info("Posted to slack")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
