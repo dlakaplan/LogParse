@@ -60,7 +60,7 @@ def main():
     parser.add_argument(
         "--days",
         "-t",
-        type=int,
+        type=float,
         default=1,
         help="Days in the past to look for log files (<=0: find all)",
     )
