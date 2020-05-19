@@ -1185,7 +1185,6 @@ class GBTPulsarScan(object):
         self.scan_number = None
         self.source = None
         self.frequency = None
-        # not implemented
         self.execution_type = "std"
 
     @property
@@ -1273,7 +1272,7 @@ class GBTPulsarObservation(object):
         if self.request is not None:
             return self.request.end_time - self.request.start_time
         else:
-            return datetime.timedelta(secs=0)
+            return datetime.timedelta(seconds=0)
 
     @property
     def start_time(self):
@@ -1297,15 +1296,25 @@ class GBTPulsarObservation(object):
             return [self.cal_scan.scan_number]
 
     def __str__(self):
-        return "Execute PSR {:<10} ({}) for {:>4}s + {:>3}s cal at {:>4}MHz at linenumber {:>5}".format(
-            self.source,
-            self.execution_type[:3],
-            int(self.duration.total_seconds()),
-            int(self.cal_duration.total_seconds()),
-            self.frequency,
-            self.logfile_end_line,
-        )
-
+        if self.execution_type == 'std':
+            return "Execute PSR {:<10} ({}) for {:>4}s + {:>3}s cal at {:>4}MHz at linenumber {:>5}".format(
+                self.source,
+                self.execution_type[:3],
+                int(self.duration.total_seconds()),
+                int(self.cal_duration.total_seconds()),
+                self.frequency,
+                self.logfile_end_line,
+                )
+        else:
+            return "Execute {:<10} ({}) for {:>4}s on + {:>3}s off at {:>4}MHz at linenumber {:>5}".format(
+                self.source,
+                self.execution_type[:3],
+                int(self.duration.total_seconds()),
+                int(self.cal_duration.total_seconds()),
+                self.frequency,
+                self.logfile_end_line,
+                )
+            
 
 class GBTPulsarObservationLog(object):
     def __init__(self, tolerance=100):
@@ -1342,7 +1351,7 @@ class GBTPulsarObservationLog(object):
         for i in range(0, len(self._scans), 2):
             cal_scan = self._scans[i]
             logger.debug("Identified calibration scan %s", cal_scan)
-            if self._scans[i].duration.total_seconds() >= 100:
+            if self._scans[i].duration.total_seconds() >= 100 and self._scans[i].execution_type == 'std':
                 logger.warning(
                     "Exposure time of %ds for scan %d does not make sense for a calibration scan",
                     self._scans[i].duration.total_seconds(),
@@ -1352,7 +1361,7 @@ class GBTPulsarObservationLog(object):
             if len(self._scans) > i + 1:
                 science_scan = self._scans[i + 1]
                 logger.debug("Identified science scan %s", science_scan)
-                if self._scans[i + 1].duration.total_seconds() < 100:
+                if self._scans[i + 1].duration.total_seconds() < 100 and self._scans[i].execution_type == 'std':
                     logger.warning(
                         "Exposure time of %ds for scan %d does not make sense for a science scan",
                         self._scans[i+1].duration.total_seconds(),
@@ -1585,6 +1594,7 @@ class GBTPulsarObservationLog(object):
         last_message = None
         log_entry = None
         started = False
+        scan_type = 'std'
         for line in line_iterator:
             # the stuff above here appears to be pre-amble
             # containing the astrid code etc
@@ -1722,7 +1732,9 @@ class GBTPulsarObservationLog(object):
                             scan.slewing = slewing
                             scan.source = source
                             scan.logfile_start_line = line_num
-                            scan.frequency = float(log.other_parameters["restfreq"])
+                            scan.execution_type = scan_type
+                            if "restfreq" in log.other_parameters:
+                                scan.frequency = float(log.other_parameters["restfreq"])
                             logger.info(
                                 "Starting observation of source %s at %s",
                                 source,
@@ -1763,6 +1775,12 @@ class GBTPulsarObservationLog(object):
                         logger.debug('Finishing log at %s line %d',log.end_time,line_num)
                         break
 
+                    elif log_entry.message.startswith('Configuring for backend'):
+                        log.backend = log_entry.message.split()[-1].replace('...','')
+
+                    elif log_entry.message.startswith('OnOff'):
+                        scan_type = 'cal'
+
                 elif "=" in line and not "==" in line:
                     key, value = line.split("=")
                     log.other_parameters[key.strip()] = value.strip()
@@ -1778,10 +1796,14 @@ class GBTPulsarObservationLog(object):
     def construct_filenames(self, scan):
         start_time_utc = scan.start_time.astimezone(utc)
         mjd_utc = to_mjd(start_time_utc)
-        basename = '{}_{}_{:05}_{}'.format(self.backend.replace("'","").lower(),
-                                           int(mjd_utc),
-                                           int(86400*(mjd_utc-int(mjd_utc))),
-                                           scan.source)
+        if self.backend is not None:
+            basename = '{}'.format(self.backend.replace("'","").lower())
+        else:
+            basename = '???'
+
+        basename += '_{}_{:05}_{}'.format(int(mjd_utc),
+                                          int(86400*(mjd_utc-int(mjd_utc))),
+                                          scan.source)
         names=[]
         if scan.science_scan is not None:
             science_name = basename + '_{:04d}'.format(scan.science_scan.scan_number)
