@@ -585,6 +585,8 @@ class CIMAPulsarObservationLog(object):
 
     @filename.setter
     def filename(self, value):
+        if not os.path.exists(value):
+            raise IOError('Cannot open log file %s' % value)
         self._filename = value
         self._modtime = datetime.datetime.fromtimestamp(
             os.path.getmtime(self._filename)
@@ -1400,6 +1402,8 @@ class GBTPulsarObservationLog(object):
 
     @filename.setter
     def filename(self, value):
+        if not os.path.exists(value):
+            raise IOError('Cannot open log file %s' % value)
         self._filename = value
         # try to parse with the new formatting
         dir, fname = os.path.split(value)
