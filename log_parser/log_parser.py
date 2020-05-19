@@ -25,7 +25,7 @@ frequency_from_band = {"L": 1500, "S": 2300, "820": 820}
 
 gbt_tz = pytz.timezone("America/New_York")
 ao_tz = pytz.timezone("America/Puerto_Rico")
-
+utc = pytz.utc
 
 def parse_cima_log_line(line, datetime_format="%Y-%b-%d %X"):
     """
@@ -1353,7 +1353,7 @@ class GBTPulsarObservationLog(object):
                 if self._scans[i + 1].duration.total_seconds() < 100:
                     logger.warning(
                         "Exposure time of %ds for scan %d does not make sense for a science scan",
-                        self._scans[i].duration.total_seconds(),
+                        self._scans[i+1].duration.total_seconds(),
                         i,
                     )
 
@@ -1371,7 +1371,7 @@ class GBTPulsarObservationLog(object):
                         request,
                     )
                     obs.request = request
-                elif science_scan is None and cal_scan.source == requests.source:
+                elif science_scan is None and cal_scan.source == request.source:
                     logger.debug(
                         "Identified request for cal scan %s: %s", cal_scan, request,
                     )
@@ -1401,7 +1401,19 @@ class GBTPulsarObservationLog(object):
     @filename.setter
     def filename(self, value):
         self._filename = value
-        self.observing_session_number = int(self._filename.split("_")[2])
+        # try to parse with the new formatting
+        dir, fname = os.path.split(value)
+        match = re.match(
+            r"(?P<project>\w+?)\.(?P<block>\S+?)\.(?P<datetime>\d{4}-\d{2}-\d{2}\_\d{2}:\d{2}:\d{2}[\+\-]\d{2}:\d{2})\.(?P<observer>\w+?)\.log\.txt",
+            fname,
+        )
+        if match:
+            self.project = match.group("project")
+            self.observer = match.group("observer")
+            self.sb_name = match.group("block")
+
+        else:
+            self.observing_session_number = int(self._filename.split("_")[2])
         self._modtime = datetime.datetime.fromtimestamp(
             os.path.getmtime(self._filename)
         )
@@ -1568,15 +1580,22 @@ class GBTPulsarObservationLog(object):
         source = None
         last_message = None
         log_entry = None
+        started = False
         for line in line_iterator:
             # the stuff above here appears to be pre-amble
             # containing the astrid code etc
             # actual log starts with
             """
-            #######################################################
-             LOG SESSION NUMBER 1 
-             """
-            if log.log_session_number == 0:
+            [15:17:28] ******** Begin Scheduling Block
+            """
+            if not started:
+                log_entry = log.parse_log_line(line)
+                if (
+                    log_entry is not None
+                    and log_entry.message == "******** Begin Scheduling Block"
+                ):
+                    started = True
+                """
                 match = re.match(r"\s*LOG SESSION NUMBER (\d+)", line)
                 if match:
                     log.log_session_number = int(match.groups()[0])
@@ -1586,6 +1605,7 @@ class GBTPulsarObservationLog(object):
                         log.log_session_number,
                         line_num,
                     )
+                    """
 
                 # the band gets set early on in the ASTRID setup
                 # it is only used in setting the band for the requests
@@ -1605,7 +1625,6 @@ class GBTPulsarObservationLog(object):
                     logger.info(
                         "Setting backend to %s line %s", log.backend, line_num,
                     )
-
             else:
                 # if we get here, then the pre-amble is finished
                 # keep track of the last line as well, since that helps interpret some things
@@ -1737,10 +1756,14 @@ class GBTPulsarObservationLog(object):
                     elif log_entry.message == "******** End Scheduling Block":
                         log._end_time = log_entry.datetime
                         log.end_line = line_num
+                        logger.debug('Finishing log at %s line %d',log.end_time,line_num)
+                        break
 
-                elif "=" in line:
+                elif "=" in line and not "==" in line:
                     key, value = line.split("=")
                     log.other_parameters[key.strip()] = value.strip()
+                    if key.strip() == "backend":
+                        log.backend = value.strip()
             line_num += 1
 
         f.close()
@@ -1749,7 +1772,21 @@ class GBTPulsarObservationLog(object):
         return log
 
     def construct_filenames(self, scan):
-        return map(str, scan.scan_numbers)
+        start_time_utc = scan.start_time.astimezone(utc)
+        mjd_utc = to_mjd(start_time_utc)
+        basename = '{}_{}_{:05}_{}'.format(self.backend.replace("'","").lower(),
+                                           int(mjd_utc),
+                                           int(86400*(mjd_utc-int(mjd_utc))),
+                                           scan.source)
+        names=[]
+        if scan.science_scan is not None:
+            science_name = basename + '_{:04d}'.format(scan.science_scan.scan_number)
+            names.append(science_name)            
+        if scan.cal_scan is not None:
+            cal_name = basename + '_{:04d}_cal'.format(scan.cal_scan.scan_number)            
+            names.append(cal_name)
+        return names
+        #return map(str, scan.scan_numbers)
 
     def print_results(self, output=sys.stdout):
         print(
