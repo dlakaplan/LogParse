@@ -147,14 +147,14 @@ def main():
         logs = []
         while True:
             log = log_parser.GBTPulsarObservationLog.parse_gbt_logfile(
-                file, start_line = start_line, tolerance=args.tolerance,
-                )
+                file, start_line=start_line, tolerance=args.tolerance,
+            )
             if log.start_time is None:
                 break
             if log.end_line is None:
                 log_parser.logger.error(
                     "parser returned end line of None while parsing %s", file
-                    )
+                )
                 break
             start_line = log.end_line + 1
             logs.append(log)
@@ -173,6 +173,21 @@ def main():
         text = re.sub(r"(\s+)(\wGBT\d\d\w_\d+)", r"\1*\2*", text)
 
         body = {"username": "GBTbot", "text": text}
+        """
+        body["blocks"] = []
+        text_lines = text.split("\n")
+        for start in range(0, len(text_lines), 30):
+            end = min(len(text_lines), start + 30)
+            body["blocks"].append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "\n> ".join(text_lines[start:end]),
+                    },
+                }
+            )
+            """
         jsondata = json.dumps(body)
         jsondataasbytes = jsondata.encode("utf-8")  # needs to be bytes
         # post it to slack
