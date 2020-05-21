@@ -1805,10 +1805,10 @@ class GBTPulsarObservationLog(object):
                                           int(86400*(mjd_utc-int(mjd_utc))),
                                           scan.source)
         names=[]
-        if scan.science_scan is not None:
+        if scan.science_scan is not None and not (scan.execution_type == "cal"):
             science_name = basename + '_{:04d}'.format(scan.science_scan.scan_number)
             names.append(science_name)            
-        if scan.cal_scan is not None:
+        if scan.cal_scan is not None or scan.execution_type == "cal":
             cal_name = basename + '_{:04d}_cal'.format(scan.cal_scan.scan_number)            
             names.append(cal_name)
         return names
