@@ -168,7 +168,9 @@ class CIMAPulsarObservationRequest(object):
 
     def __str__(self):
         return "Observe {} at {} MHz for {}".format(
-            self.source, self.frequency, self.duration,
+            self.source,
+            self.frequency if (self.frequency is not None) else 0,
+            self.duration,
         )
 
 
@@ -323,7 +325,7 @@ class CIMAPulsarScan(object):
             self.source,
             self.execution.type[:3],
             int(self.executed_duration.total_seconds()),
-            self.frequency,
+            self.frequency if (self.frequency is not None) else 0,
             self.logfile_end_line,
         )
 
@@ -355,7 +357,7 @@ class CIMAPulsarObservationLog(object):
                     "Requested scan of %s for %d sec at %d MHz [line=%d] was not executed.",
                     request.source,
                     request.duration.total_seconds(),
-                    request.frequency,
+                    request.frequency if (request.frequency is not None) else 0,
                     request.setup_executive_line_number,
                 )
             else:
@@ -1099,7 +1101,7 @@ class CIMAPulsarObservationPlans(object):
                     request.source,
                     0,
                     # request.duration.total_seconds(),
-                    request.frequency,
+                    request.frequency if (request.frequency is not None) else 0,
                     request.setup_command_line_number,
                 )
             if not request.source_matches:
@@ -1107,7 +1109,7 @@ class CIMAPulsarObservationPlans(object):
                     'Requested scan of %s for %d sec at %d MHz [line=%d]: parfile "%s" does not match source "%s"',
                     request.source,
                     request.duration.total_seconds(),
-                    request.frequency,
+                    request.frequency if (request.frequency is not None) else 0,
                     request.setup_command_line_number,
                     request.parfile,
                     request.source,
@@ -1126,7 +1128,7 @@ class CIMAPulsarObservationPlans(object):
                 "Request PSR {:<10} for {:>4}s at {:>4}MHz at linenumber {:>5} {}".format(
                     request.source,
                     int(request.duration.total_seconds()),
-                    request.frequency,
+                    request.frequency if (request.frequency is not None) else 0,
                     request.setup_command_line_number,
                     note,
                 ),
@@ -1171,7 +1173,9 @@ class GBTPulsarObservationRequest(object):
 
     def __str__(self):
         return "Observe {} at {} MHz for {}".format(
-            self.source, self.frequency, self.duration,
+            self.source,
+            self.frequency if (self.frequency is not None) else 0,
+            self.duration,
         )
 
 
@@ -1214,7 +1218,7 @@ class GBTPulsarScan(object):
             self.source,
             self.execution_type[:3],
             int(self.duration.total_seconds()),
-            self.frequency,
+            self.frequency if (self.frequency is not None) else 0,
             self.logfile_end_line,
         )
 
@@ -1302,7 +1306,7 @@ class GBTPulsarObservation(object):
                 self.execution_type[:3],
                 int(self.duration.total_seconds()),
                 int(self.cal_duration.total_seconds()),
-                self.frequency,
+                self.frequency if (self.frequency is not None) else 0,
                 self.logfile_end_line,
                 )
         else:
@@ -1311,7 +1315,7 @@ class GBTPulsarObservation(object):
                 self.execution_type[:3],
                 int(self.duration.total_seconds()),
                 int(self.cal_duration.total_seconds()),
-                self.frequency,
+                self.frequency if (self.frequency is not None) else 0,
                 self.logfile_end_line,
                 )
             
