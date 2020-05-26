@@ -195,19 +195,34 @@ def main():
             req = urllib.request.Request(slackurl)
             req.add_header("Content-Type", "application/json; charset=utf-8")
             req.add_header("Content-Length", len(jsondataasbytes))
-            response = urllib.request.urlopen(req, jsondataasbytes)
+            try:
+                response = urllib.request.urlopen(req, jsondataasbytes).getcode()
+            except urllib.error.HTTPError as e:
+                # Return code error (e.g. 404, 501, ...)
+                # ...
+                log_parser.logger.error(
+                    "Request to slack returned an HTTPError %s",e.code)
+            except urllib.error.URLError as e:
+                # Not an HTTP-specific error (e.g. connection refused)
+                # ...
+                log_parser.logger.error(
+                    "Request to slack returned an error:\n%s",
+                    e.reason)
+            else:
+                log_parser.logger.info("Posted to slack")
+
         else:
             response = requests.post(
                 slackurl, data=jsondata, headers={"Content-Type": "application/json"},
             )
 
-        if response.status_code != 200:
-            log_parser.logger.error(
-                "Request to slack returned an error %s, the response is:\n%s"
-                % (response.status_code, response.text)
-            )
-        else:
-            log_parser.logger.info("Posted to slack")
+            if response.status_code != 200:
+                log_parser.logger.error(
+                    "Request to slack returned an error %s, the response is:\n%s"
+                    % (response.status_code, response.text)
+                    )
+            else:
+                log_parser.logger.info("Posted to slack")
 
 
 if __name__ == "__main__":
