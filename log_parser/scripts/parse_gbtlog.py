@@ -155,6 +155,7 @@ def main():
                 log_parser.logger.error(
                     "parser returned end line of None while parsing %s", file
                 )
+                logs.append(log)
                 break
             start_line = log.end_line + 1
             logs.append(log)

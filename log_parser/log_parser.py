@@ -1469,7 +1469,10 @@ class GBTPulsarObservationLog(object):
 
     @property
     def elapsed_time(self):
-        return self.end_time - self.start_time
+        if self.start_time is not None and self.end_time is not None:
+            return self.end_time - self.start_time
+        else:
+            return datetime.timedelta(seconds=0)
 
     @property
     def observing_time(self):
