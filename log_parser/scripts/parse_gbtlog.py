@@ -124,18 +124,18 @@ def main():
             )
 
         for dir_name, subdir_list, file_list in os.walk(args.directory):
-            for file in file_list:
-                if re.match(r"\wGBT\d\d[AB]_\d+_\d+_log.txt", file):
-                    filename = os.path.join(dir_name, file)
-                    modtime = datetime.datetime.fromtimestamp(
-                        os.path.getmtime(filename)
-                    )
-                    if args.days > 0:
-                        if today - modtime < datetime.timedelta(days=args.days):
-                            good_files.append(filename)
-                    else:
-                        good_files.append(filename)
+            files = glob.glob(os.path.join(dir_name, "?GBT*log.txt"))
+            for file in files:
+                log_parser.logger.debug("File %s matches pattern...", file)
+                modtime = datetime.datetime.fromtimestamp(os.path.getmtime(file))
+                if args.days > 0:
+                    if today - modtime < datetime.timedelta(days=args.days):
+                        good_files.append(file)
+                else:
+                    good_files.append(file)
 
+        # sort them by modtime
+        good_files = sorted(good_files, key=os.path.getmtime)
         if len(good_files) == 0:
             log_parser.logger.error("No files found")
 
@@ -201,13 +201,14 @@ def main():
                 # Return code error (e.g. 404, 501, ...)
                 # ...
                 log_parser.logger.error(
-                    "Request to slack returned an HTTPError %s",e.code)
+                    "Request to slack returned an HTTPError %s", e.code
+                )
             except urllib.error.URLError as e:
                 # Not an HTTP-specific error (e.g. connection refused)
                 # ...
                 log_parser.logger.error(
-                    "Request to slack returned an error:\n%s",
-                    e.reason)
+                    "Request to slack returned an error:\n%s", e.reason
+                )
             else:
                 log_parser.logger.info("Posted to slack")
 
@@ -220,7 +221,7 @@ def main():
                 log_parser.logger.error(
                     "Request to slack returned an error %s, the response is:\n%s"
                     % (response.status_code, response.text)
-                    )
+                )
             else:
                 log_parser.logger.info("Posted to slack")
 
