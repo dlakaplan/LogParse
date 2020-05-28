@@ -84,7 +84,7 @@ def main():
         log_parser.logger.setLevel(logging.WARNING)
     elif args.verbose == 1:
         log_parser.logger.setLevel(logging.INFO)
-    elif args.verbose == 2:
+    elif args.verbose >= 2:
         log_parser.logger.setLevel(logging.DEBUG)
 
     if args.out == "stdout":

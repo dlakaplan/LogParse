@@ -94,7 +94,7 @@ def main():
         log_parser.logger.setLevel(logging.WARNING)
     elif args.verbose == 1:
         log_parser.logger.setLevel(logging.INFO)
-    elif args.verbose == 2:
+    elif args.verbose >= 2:
         log_parser.logger.setLevel(logging.DEBUG)
 
     if args.out == "stdout":
@@ -191,13 +191,14 @@ def main():
                 # Return code error (e.g. 404, 501, ...)
                 # ...
                 log_parser.logger.error(
-                    "Request to slack returned an HTTPError %s",e.code)
+                    "Request to slack returned an HTTPError %s", e.code
+                )
             except urllib.error.URLError as e:
                 # Not an HTTP-specific error (e.g. connection refused)
                 # ...
                 log_parser.logger.error(
-                    "Request to slack returned an error:\n%s",
-                    e.reason)
+                    "Request to slack returned an error:\n%s", e.reason
+                )
             else:
                 log_parser.logger.info("Posted to slack")
 
@@ -210,7 +211,7 @@ def main():
                 log_parser.logger.error(
                     "Request to slack returned an error %s, the response is:\n%s"
                     % (response.status_code, response.text)
-                    )
+                )
             else:
                 log_parser.logger.info("Posted to slack")
     sys.exit(0)
